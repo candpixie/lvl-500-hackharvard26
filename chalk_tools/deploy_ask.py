@@ -11,41 +11,21 @@ import json
 import sys
 
 import chalkcompute
-from chalkcompute import Image, ScalingGroup, StartupProbe
+from chalkcompute import ScalingGroup, StartupProbe
 
 from chalk_tools import core
+from chalk_tools.ask_image import CODE, DATA, build_image
 
 ROOT = core.ROOT
 NAME = "orbit-ask"
 PORT = 8080
-DATA = {  # local file -> path inside the container; data uses volume mode because "copy" caps files at 32 KiB
-    ROOT / "data/out/shells.json": "/app/data/shells.json",
-    ROOT / "data/out/close_approaches.json": "/app/data/close_approaches.json",
-    ROOT / "data/out/tools/catalog.csv.gz": "/app/data/catalog.csv.gz",
-}
-CODE = {
-    ROOT / "pipeline/orbit_data.py": "/app/pipeline/orbit_data.py",
-    ROOT / "pipeline/scoring.py": "/app/pipeline/scoring.py",
-    ROOT / "chalk_tools/ask_core.py": "/app/ask_core.py",
-    ROOT / "chalk_tools/ask_app.py": "/app/app.py",
-}
-
-
-def build_image():
-    img = (Image.debian_slim("3.12").pip_install(["flask", "numpy", "pandas", "chalkcompute"])
-           .env({"ASK_PIPELINE": "/app/pipeline", "ASK_DATA": "/app/data", "PYTHONUNBUFFERED": "1"}))
-    for src, dst in CODE.items():
-        img = img.add_local_file(str(src), dst, strategy="copy")
-    for src, dst in DATA.items():
-        img = img.add_local_file(str(src), dst, strategy="volume")
-    return img.workdir("/app").entrypoint(["python", "/app/app.py"])
 
 
 def main():
     missing = [str(p) for p in (*CODE, *DATA) if not p.exists()]
     if missing:
         sys.exit(f"missing files: {missing}")
-    sg = ScalingGroup(image=build_image(), name=NAME, port=PORT, min_replicas=1, max_replicas=1,
+    sg = ScalingGroup(image=build_image(code_strategy="volume"), name=NAME, port=PORT, min_replicas=1, max_replicas=1,
                       authenticated=True, tracing=chalkcompute.TracingPolicy(sample_rate=1.0),
                       startup_probe=StartupProbe.http("/health")).deploy()
     print("web_url:", sg.web_url)
