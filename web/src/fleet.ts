@@ -55,7 +55,7 @@ function paint(geometry: BufferGeometry, rgb: readonly [number, number, number])
 
 function satelliteGeometry() {
   const bus = paint(new BoxGeometry(0.5, 0.34, 0.36), [0.93, 0.95, 0.98])
-  const panel = new BoxGeometry(0.98, 0.04, 0.56)
+  const panel = new BoxGeometry(0.98, 0.1, 0.56)
   paint(panel, [0.35, 0.58, 0.92])
   const left = panel.clone()
   left.translate(-0.76, 0, 0)
@@ -74,7 +74,7 @@ function satelliteGeometry() {
 }
 
 function debrisGeometry() {
-  const rock = paint(new DodecahedronGeometry(0.46, 0), [1, 1, 1])
+  const rock = paint(new DodecahedronGeometry(0.46, 0), [0.949, 0.647, 0.255])
   rock.scale(1.25, 0.72, 0.9)
   return rock
 }
@@ -103,6 +103,7 @@ const GEOMETRY: Record<keyof OrbitCounts, () => BufferGeometry> = {
 
 export interface Fleet {
   update(positions: Float32Array): void
+  setVisible(visible: boolean): void
   dispose(): void
 }
 
@@ -132,7 +133,7 @@ export function createFleet(
     const mesh = new InstancedMesh(geometry, material, members.length)
     mesh.frustumCulled = false
     mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(members.length * 3), 3)
-      const tint = new Color(type === 'satellite' ? '#ffffff' : TYPE_COLOR[type])
+    const tint = new Color(type === 'satellite' ? '#ffffff' : TYPE_COLOR[type])
     const alt = new Float32Array(members.length)
     const kind = new Float32Array(members.length)
     const ids = new Float32Array(members.length)
@@ -148,6 +149,7 @@ export function createFleet(
     geometry.setAttribute('aKind', new InstancedBufferAttribute(kind, 1))
     geometry.setAttribute('aId', new InstancedBufferAttribute(ids, 1))
     mesh.instanceColor.needsUpdate = true
+    mesh.visible = false
     add(mesh)
     meshes.push(mesh)
   }
@@ -189,6 +191,9 @@ export function createFleet(
 
   return {
     update,
+    setVisible(visible: boolean) {
+      for (const mesh of meshes) mesh.visible = visible
+    },
     dispose() {
       for (const mesh of meshes) {
         mesh.geometry.dispose()

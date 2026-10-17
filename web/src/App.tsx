@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Globe from 'globe.gl'
-import { ShaderMaterial, type MeshPhongMaterial } from 'three'
+import { BufferGeometry, Float32BufferAttribute, Points, ShaderMaterial, type MeshPhongMaterial } from 'three'
+import '@fontsource/ibm-plex-sans/400.css'
+import '@fontsource/ibm-plex-sans/500.css'
 import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
 import { createFleet, type Fleet } from './fleet.ts'
@@ -42,14 +44,61 @@ const craftVertex = `
     vec3 shaped = position * mix(1.0, 1.65, picked);
     vec4 placed = instanceMatrix * vec4(shaped, 1.0);
     vec3 lit = normalize(mat3(instanceMatrix) * normal);
-    float shade = 0.62 + 0.38 * max(dot(lit, normalize(vec3(0.35, 0.82, 0.28))), 0.0);
+    vec3 key = normalize(vec3(0.32, 0.78, 0.42));
+    vec3 fill = normalize(vec3(-0.55, 0.15, -0.35));
+    float shade = 0.78 + 0.22 * max(dot(lit, key), 0.0) + 0.16 * max(dot(lit, fill), 0.0);
     if (debris > 0.5) vAlpha = mix(uDebrisOnly > 0.5 ? 0.1 : 0.78, 1.0, inside);
     else vAlpha = mix(uDim, 1.0, inside);
     if (uHideOutside > 0.5) vAlpha *= inside;
     if (uDebrisOnly > 0.5) vAlpha *= debris;
     vAlpha = max(vAlpha, picked);
-    vColor = color * instanceColor * shade * mix(1.0, 1.25, picked);
+    vec3 base = color * instanceColor;
+    if (debris > 0.5) base = vec3(0.949, 0.647, 0.255);
+    else base *= shade;
+    vColor = base * mix(1.0, 1.25, picked);
     gl_Position = projectionMatrix * modelViewMatrix * placed;
+  }
+`
+
+const pointVertex = `
+  attribute float aAlt;
+  attribute float aKind;
+  uniform float uShellMin;
+  uniform float uShellMax;
+  uniform float uDim;
+  uniform float uHideOutside;
+  uniform float uDebrisOnly;
+  uniform float uExaggerate;
+  uniform float uSize;
+  uniform float uScale;
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    float realRel = max(length(position) / 100.0 - 1.0, 0.0);
+    float capped = min(realRel, 0.5);
+    vec3 placed = normalize(position) * 100.0 * (1.0 + capped * uExaggerate);
+    float inside = step(uShellMin, aAlt) * step(aAlt, uShellMax);
+    float debris = step(0.5, aKind);
+    vColor = mix(color, vec3(0.949, 0.647, 0.255), debris);
+    if (debris > 0.5) vAlpha = mix(0.55, 1.0, inside);
+    else vAlpha = mix(uDim, 1.0, inside);
+    if (uHideOutside > 0.5) vAlpha *= inside;
+    if (uDebrisOnly > 0.5) vAlpha *= debris;
+    vec4 mv = modelViewMatrix * vec4(placed, 1.0);
+    float boost = mix(1.0, 2.2, debris) * mix(0.45, 1.65, inside);
+    gl_PointSize = uSize * boost * (uScale / -mv.z);
+    gl_Position = projectionMatrix * mv;
+  }
+`
+
+const pointFragment = `
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    if (vAlpha < 0.03) discard;
+    vec2 centered = gl_PointCoord - vec2(0.5);
+    if (dot(centered, centered) > 0.25) discard;
+    gl_FragColor = vec4(vColor, vAlpha);
   }
 `
 
@@ -57,8 +106,8 @@ const craftFragment = `
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
-    if (vAlpha < 0.03) discard;
-    gl_FragColor = vec4(vColor * vAlpha, 1.0);
+    if (vAlpha < 0.25) discard;
+    gl_FragColor = vec4(vColor, 1.0);
   }
 `
 
@@ -81,15 +130,37 @@ function webglAvailable() {
   }
 }
 
-function fleetMaterial(altitudeKm: number) {
+function shellUniforms(altitudeKm: number) {
   const bounds = shellBounds(altitudeKm)
+  return {
+    uShellMin: { value: bounds.min },
+    uShellMax: { value: bounds.max },
+    uDim: { value: 0.07 },
+    uHideOutside: { value: 0 },
+    uDebrisOnly: { value: 0 },
+  }
+}
+
+function pointMaterial(altitudeKm: number) {
   return new ShaderMaterial({
     uniforms: {
-      uShellMin: { value: bounds.min },
-      uShellMax: { value: bounds.max },
-      uDim: { value: 0.04 },
-      uHideOutside: { value: 0 },
-      uDebrisOnly: { value: 0 },
+      ...shellUniforms(altitudeKm),
+      uExaggerate: { value: ALTITUDE_EXAGGERATION },
+      uSize: { value: 2.1 },
+      uScale: { value: 400 },
+    },
+    vertexShader: pointVertex,
+    fragmentShader: pointFragment,
+    transparent: true,
+    depthWrite: false,
+    vertexColors: true,
+  })
+}
+
+function fleetMaterial(altitudeKm: number) {
+  return new ShaderMaterial({
+    uniforms: {
+      ...shellUniforms(altitudeKm),
       uPick: { value: -1 },
     },
     vertexShader: craftVertex,
@@ -123,7 +194,7 @@ export default function App() {
     const globe = (() => {
       try {
         return new Globe(host, {
-          rendererConfig: { antialias: true, alpha: false, failIfMajorPerformanceCaveat: false },
+          rendererConfig: { antialias: true, alpha: false, preserveDrawingBuffer: true, failIfMajorPerformanceCaveat: false },
         })
       } catch {
         return null
@@ -169,26 +240,41 @@ export default function App() {
     controls.minDistance = 160
     controls.maxDistance = 2200
 
-    const material = fleetMaterial(START_ALTITUDE)
+    const dots = pointMaterial(START_ALTITUDE)
+    const models = fleetMaterial(START_ALTITUDE)
+    const materials = [dots, models]
     const fit = () => {
-      const width = window.innerWidth
+      const width = Math.max(1, Math.round(host.clientWidth || document.documentElement.clientWidth || window.innerWidth))
+      const height = Math.max(
+        1,
+        Math.round(host.clientHeight || document.documentElement.clientHeight || window.innerHeight),
+      )
       const column = Math.min(320, width * 0.42)
       globe.width(width)
-      globe.height(window.innerHeight)
+      globe.height(height)
       globe.globeOffset([Math.round(column * 0.42), 0])
+      dots.uniforms.uScale.value = height * 0.5
     }
     fit()
+    const refit = requestAnimationFrame(fit)
+    const resizeObserver = new ResizeObserver(fit)
+    resizeObserver.observe(host)
     window.addEventListener('resize', fit)
+    window.visualViewport?.addEventListener('resize', fit)
 
-    applyShellRef.current = (altitudeKm) => {
+    const syncShell = (altitudeKm: number) => {
       const bounds = shellBounds(altitudeKm)
-      material.uniforms.uShellMin.value = bounds.min
-      material.uniforms.uShellMax.value = bounds.max
+      for (const material of materials) {
+        material.uniforms.uShellMin.value = bounds.min
+        material.uniforms.uShellMax.value = bounds.max
+      }
       const realRel = Math.min(Math.max(altitudeKm, 0) / 6371, 0.5)
       controls.minDistance = 100 * (1 + realRel * ALTITUDE_EXAGGERATION) + 22
     }
+    applyShellRef.current = syncShell
     debrisRef.current = (on) => {
-      material.uniforms.uDebrisOnly.value = on ? 1 : 0
+      const value = on ? 1 : 0
+      for (const material of materials) material.uniforms.uDebrisOnly.value = value
     }
 
     globe.renderer().domElement.addEventListener('webglcontextlost', (event: Event) => {
@@ -205,22 +291,30 @@ export default function App() {
 
     const clearPick = () => {
       picked = -1
-      material.uniforms.uPick.value = -1
+      models.uniforms.uPick.value = -1
       setFact(null)
       setLiveKm(null)
     }
     clearPickRef.current = clearPick
 
+    let fleet: Fleet | null = null
+    let cloud: Points | null = null
+
+    const showModels = (on: boolean) => {
+      if (cloud) cloud.visible = !on
+      fleet?.setVisible(on)
+      for (const material of materials) material.uniforms.uHideOutside.value = on ? 1 : 0
+      if (on && positionsRef.current) fleet?.update(positionsRef.current)
+    }
+
     globe.onZoom((pov: { altitude: number }) => {
       const next = pov.altitude < ZOOM_HIDE_ALTITUDE
-      material.uniforms.uHideOutside.value = next ? 1 : 0
       if (next === zoomed) return
       zoomed = next
+      showModels(next)
       setClose(next)
       if (!next) clearPick()
     })
-
-    let fleet: Fleet | null = null
     const canvas = globe.renderer().domElement
     let pickFrame = 0
     const onPointerMove = (event: PointerEvent) => {
@@ -250,7 +344,7 @@ export default function App() {
         const next = index ?? -1
         if (next === picked) return
         picked = next
-        material.uniforms.uPick.value = picked
+        models.uniforms.uPick.value = picked
         if (index == null) {
           setFact(null)
           setLiveKm(null)
@@ -284,17 +378,29 @@ export default function App() {
         altitudesRef.current = message.altitudes
         kindsRef.current = message.kinds
         factsRef.current = message.facts
-        fleet = createFleet(message.facts, message.altitudes, message.kinds, material, (mesh) => {
+        const geometry = new BufferGeometry()
+        geometry.setAttribute('position', new Float32BufferAttribute(message.positions, 3))
+        geometry.setAttribute('color', new Float32BufferAttribute(message.colors, 3))
+        geometry.setAttribute('aAlt', new Float32BufferAttribute(message.altitudes, 1))
+        geometry.setAttribute('aKind', new Float32BufferAttribute(message.kinds, 1))
+        const points = new Points(geometry, dots)
+        points.frustumCulled = false
+        globe.scene().add(points)
+        cloud = points
+        fleet = createFleet(message.facts, message.altitudes, message.kinds, models, (mesh) => {
           globe.scene().add(mesh)
         })
-        fleet.update(message.positions)
         setEpoch(message.epoch)
         setStatus({ state: 'ready' })
         return
       }
-      if (!fleet || message.positions.length !== factsRef.current.length * 3) return
-      positionsRef.current = message.positions
-      fleet.update(message.positions)
+      if (!cloud || !fleet || message.positions.length !== factsRef.current.length * 3) return
+      const positions = cloud.geometry.getAttribute('position')
+      const array = positions.array as Float32Array
+      array.set(message.positions)
+      positions.needsUpdate = true
+      positionsRef.current = array
+      if (zoomed) fleet.update(array)
       if (picked >= 0) {
         const length = Math.hypot(
           message.positions[picked * 3],
@@ -312,9 +418,14 @@ export default function App() {
       cancelAnimationFrame(pickFrame)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerleave', onPointerLeave)
+      cancelAnimationFrame(refit)
+      resizeObserver.disconnect()
       window.removeEventListener('resize', fit)
+      window.visualViewport?.removeEventListener('resize', fit)
       worker.terminate()
-      material.dispose()
+      dots.dispose()
+      models.dispose()
+      cloud?.geometry.dispose()
       fleet?.dispose()
       globe._destructor()
     }
@@ -368,6 +479,7 @@ export default function App() {
         <p className="kicker">Orbit crowding</p>
         <h1>How crowded is this altitude?</h1>
         <p className="dek">{close ? 'Point at a satellite.' : 'That shell stays bright.'}</p>
+        {close && <p className="scale-note">Enlarged, not to scale</p>}
         <p className="asof">{epoch ? `Data as of ${formatEpoch(epoch)}` : 'CelesTrak GP'}</p>
         <PlacePanel
           altitude={altitude}
