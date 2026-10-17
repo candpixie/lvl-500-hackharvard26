@@ -15,7 +15,10 @@ For each mission (an inclination and an altitude band), a picker chooses one 50 
 | count_in_plane | 0.839 +/- 0.033 |
 | random (10 seeds) | 0.505 |
 
-## Local runs over realistic mission bands (same code and data)
+## Run 2 on Chalk (evaluation `recommend-orbit-vs-baselines-v2`, run `62f85b1c-3310-4c84-9766-1df3f7ed6f01`)
+884 rows (4 bands x 17 inclinations x 13 picker rows), 0 task errors, 0 scorer errors. The table below is from this run; it matches the earlier local run in every cell.
+
+## Bands table (Chalk run 2; same numbers as the local runs)
 | Band | recommend | count_in_plane | web_rule | random |
 |---|---|---|---|---|
 | 400-1200 km | 0.851 | 0.839 | 0.904 | 0.500 |
