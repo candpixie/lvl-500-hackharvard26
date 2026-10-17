@@ -23,7 +23,7 @@ All return `{ok, data, coverage, caveats, snapshot_id}` or `{ok:false, error:{ty
 - Deliverables of the 30 minutes: the spike results (call one Chalk function from a script; Grok with a tool definition; one Imagine timing; ask reps about keys and credits), `docs/api.md`, and a mock `/api/ask` with canned `ui_events`.
 
 ## Person A: Chalk, data, evals, observability
-Owns `pipeline/`, `data/`, and a new `chalk/` folder (functions, tests, evals).
+Owns `pipeline/`, `data/`, and a new `chalk_tools/` folder (functions, tests, evals).
 - By 2 PM: data prep for the tools (shell density, altitude-joined close approaches, `data/out/manifest.json`); `shell_crowding` deployed on Chalk and callable.
 - By 4 PM: `objects_near`, `close_approaches`, `recommend_orbit`; tool accuracy tests (below); `tracing=True` and spans.
 - By 6 PM: SOCRATES answer key from all 195,841 rows; eval datasets and scorers; one eval run with a score and a random-pick baseline; one trace ready to show; record/replay cache generation for the demo questions; `/api/health` and `/api/manifest`.
