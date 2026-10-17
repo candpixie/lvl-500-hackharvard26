@@ -31,7 +31,7 @@ History: our first idea was whether an orbital data center pays back its carbon 
 - Rules: say "crowding" or "close approach", never "collision probability" unless quoting SOCRATES. Every number on screen has a source. Grok media is illustration and is labeled so. Verify decay times before any slide.
 
 ## 5. Architecture
-Browser (text, later voice) -> `/api/ask` on a small server (middleware in `web/vite.config.ts`, holds the keys) -> Grok with function calling -> Chalk functions -> Grok writes the spoken answer -> server returns `{status, speak_text, display_text, ui_events[], evidence[], caveats[], trace_id, snapshot_id}` -> browser plays voice and applies UI events. Optional `/api/visual` asks Grok Imagine for an illustration after the answer, never blocking it. Also `GET /api/manifest` ("data as of") and `GET /api/health`.
+Browser (text, later voice) -> `/api/ask` on a small **Python** server in `server/` (Vite proxies `/api` to it; holds the keys; see `docs/api.md` for why it is Python and not a Vite middleware) -> Grok with function calling -> Chalk functions -> Grok writes the spoken answer -> server returns `{status, speak_text, display_text, ui_events[], evidence[], caveats[], trace_id, snapshot_id}` -> browser plays voice and applies UI events. Optional `/api/visual` asks Grok Imagine for an illustration after the answer, never blocking it. Also `GET /api/manifest` ("data as of") and `GET /api/health`.
 
 Request: `POST /api/ask {session_id, text, mode: text|voice, context: {altitude_km, inclination_deg, selected_norad}}`.
 
