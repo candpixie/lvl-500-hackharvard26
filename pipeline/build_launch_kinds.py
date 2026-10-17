@@ -20,10 +20,7 @@ def main():
     for key in core.KINDS:
         res = core.launch_kind_profile(snap, key)
         if res["ok"]:
-            spec = core.KINDS[key]
-            # globe highlight uses the CelesTrak group names objects.json carries; the ISS alone has no group file
-            groups = [spec["group"]] if "group" in spec else ["stations"]
-            kinds.append(res["data"] | {"map_groups": groups, "caveats": res["caveats"]})
+            kinds.append(res["data"] | {"caveats": res["caveats"]})
     payload = {"snapshot_id": snap.snapshot_id, "source": "CelesTrak SATCAT + SOCRATES, one week", "kinds": kinds}
     OUT.write_text(json.dumps(payload, indent=1) + "\n")
     print(f"{len(kinds)} kinds -> {OUT} (snapshot {snap.snapshot_id})")

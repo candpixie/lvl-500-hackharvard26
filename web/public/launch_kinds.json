@@ -23,9 +23,6 @@
     "debris_share": 0.07
    },
    "all_leo_close_approaches_per_object": 9.2,
-   "map_groups": [
-    "stations"
-   ],
    "caveats": [
     "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
     "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
@@ -56,9 +53,6 @@
     "debris_share": 0.01
    },
    "all_leo_close_approaches_per_object": 9.2,
-   "map_groups": [
-    "starlink"
-   ],
    "caveats": [
     "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
     "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
@@ -87,9 +81,6 @@
     "debris_share": 0.26
    },
    "all_leo_close_approaches_per_object": 9.2,
-   "map_groups": [
-    "oneweb"
-   ],
    "caveats": [
     "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
     "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
@@ -118,9 +109,6 @@
     "debris_share": 0.33
    },
    "all_leo_close_approaches_per_object": 9.2,
-   "map_groups": [
-    "kuiper"
-   ],
    "caveats": [
     "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
     "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
@@ -149,9 +137,6 @@
     "debris_share": 0.01
    },
    "all_leo_close_approaches_per_object": 9.2,
-   "map_groups": [
-    "planet"
-   ],
    "caveats": [
     "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
     "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
@@ -180,9 +165,6 @@
     "debris_share": 0.01
    },
    "all_leo_close_approaches_per_object": 9.2,
-   "map_groups": [
-    "weather"
-   ],
    "caveats": [
     "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
     "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
@@ -211,9 +193,6 @@
     "debris_share": 0.17
    },
    "all_leo_close_approaches_per_object": 9.2,
-   "map_groups": [
-    "cubesat"
-   ],
    "caveats": [
     "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
     "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
@@ -242,9 +221,6 @@
     "debris_share": 0.17
    },
    "all_leo_close_approaches_per_object": 9.2,
-   "map_groups": [
-    "science"
-   ],
    "caveats": [
     "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
     "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
@@ -273,9 +249,6 @@
     "debris_share": 0.74
    },
    "all_leo_close_approaches_per_object": 9.2,
-   "map_groups": [
-    "military"
-   ],
    "caveats": [
     "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
     "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",

@@ -67,7 +67,6 @@ function formatScore(score: number) {
 interface LaunchKind {
   kind: string
   label: string
-  map_groups: string[]
   objects: number
   altitude_km: { p10: number; median: number; p90: number }
   inclination_deg_median: number
@@ -94,7 +93,6 @@ interface PlacePanelProps {
   shells: ShellRow[] | null
   shellError: string | null
   debrisOnly: boolean
-  onSeeGroups: (groups: string[] | null) => void
   onAltitude: (value: number) => void
   onInclination: (value: number) => void
   onCount: (value: number) => void
@@ -128,7 +126,6 @@ export default function PlacePanel({
   shells,
   shellError,
   debrisOnly,
-  onSeeGroups,
   onAltitude,
   onInclination,
   onCount,
@@ -164,7 +161,6 @@ export default function PlacePanel({
   const [touched, setTouched] = useState(false)
   const [kinds, setKinds] = useState<LaunchKind[]>([])
   const [kindKey, setKindKey] = useState('')
-  const [seeKey, setSeeKey] = useState('')
   const kind = kinds.find((row) => row.kind === kindKey) ?? null
   const dims = dimsFor(size)
   const ready = altitudeChosen || touched
@@ -224,11 +220,6 @@ export default function PlacePanel({
     setKindKey(key)
   }
 
-  function chooseSee(key: string) {
-    setSeeKey(key)
-    const row = kinds.find((item) => item.kind === key)
-    onSeeGroups(row ? row.map_groups : null)
-  }
 
   useEffect(() => {
     const name = placeName?.trim()
@@ -623,24 +614,6 @@ export default function PlacePanel({
         >
           {debrisOnly ? 'Debris only' : 'Show debris only'}
         </button>
-        {kinds.length > 0 && (
-          <label className="field">
-            <span className="field-label">Highlight on the globe</span>
-            <select
-              className="step-number kind-select"
-              value={seeKey}
-              aria-label="Highlight existing objects of a kind"
-              onChange={(event) => chooseSee(event.target.value)}
-            >
-              <option value="">Show all</option>
-              {kinds.map((row) => (
-                <option key={row.kind} value={row.kind}>
-                  {row.label}s
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
       </section>
 
       <section className="step step-impact">
