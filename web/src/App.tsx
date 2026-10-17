@@ -1140,7 +1140,7 @@ export default function App() {
     <>
       <div ref={hostRef} className="viewport" />
       <aside className="hud">
-        <p className="kicker">Orbit Payback</p>
+        <p className="kicker">LVL 500</p>
         <h1>How crowded is this altitude?</h1>
         <p className="dek">
           {pickRegion
