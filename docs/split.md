@@ -1,5 +1,8 @@
 # Work split for two people (Sat Oct 17, written 12:34 PM EDT)
 
+> **Status update (Sat afternoon):** parts of this document are superseded. The team built `api/` (FastAPI, port 8000, `/ask`), the Grok loop (`api/agent.py`, importable as `from agent import run_agent`), and a placement model (`pipeline/orbit_data.py`, `pipeline/scoring.py`). The "Python server in `server/` on port 8787" and `/api/ask` shapes below were an earlier proposal and are withdrawn; use `docs/chalk-contract.md` and `docs/chalk-teammates.md`. The Chalk functions section still applies (see `docs/api.md`).
+
+
 Gates: Sat 2 PM everything connected end to end (even if ugly), Sat 6 PM feature freeze + backup video, Sun 8 AM Devpost.
 Person A = Chalk side. Person B = Grok and web side. Names: A = ____, B = ____.
 
@@ -23,7 +26,7 @@ All return `{ok, data, coverage, caveats, snapshot_id}` or `{ok:false, error:{ty
 - Deliverables of the 30 minutes: the spike results (call one Chalk function from a script; Grok with a tool definition; one Imagine timing; ask reps about keys and credits), `docs/api.md`, and a mock `/api/ask` with canned `ui_events`.
 
 ## Person A: Chalk, data, evals, observability
-Owns `pipeline/`, `data/`, and a new `chalk/` folder (functions, tests, evals).
+Owns `pipeline/`, `data/`, and a new `chalk_tools/` folder (functions, tests, evals).
 - By 2 PM: data prep for the tools (shell density, altitude-joined close approaches, `data/out/manifest.json`); `shell_crowding` deployed on Chalk and callable.
 - By 4 PM: `objects_near`, `close_approaches`, `recommend_orbit`; tool accuracy tests (below); `tracing=True` and spans.
 - By 6 PM: SOCRATES answer key from all 195,841 rows; eval datasets and scorers; one eval run with a score and a random-pick baseline; one trace ready to show; record/replay cache generation for the demo questions; `/api/health` and `/api/manifest`.
@@ -42,7 +45,7 @@ Headline, on Chalk (A):
 - `crowding_validity`: does the density index correlate with the SOCRATES near-miss rate per shell (rank correlation). Tests whether the index means anything.
 - `mission_fit`: inclination within the range for the mission type (short hand-labeled list).
 - `grounding`: every number in the answer appears in tool output. `guardrails`: no "safe", no "collision probability" unless quoting SOCRATES, empty regions say "no tracked objects", coverage gap disclosed. `json_valid`.
-Tool accuracy (A, plain tests on a pinned snapshot): independent recompute and sums for `shell_crowding`; brute-force oracle and known objects (ISS 25544 at about 420 km and 51.6 degrees, Sentinel-1A 39634 at about 693 km and 98 degrees, plus negatives) for `objects_near`; independent re-filter, the NuSat-47 vs Fengyun-1C pair (66743 and 31441) ranked top, exclusions, km to meters for `close_approaches`.
+Tool accuracy (A, plain tests on a pinned snapshot): independent recompute and sums for `shell_crowding`; brute-force oracle and known objects (ISS 25544 at about 420 km and 51.6 degrees, Sentinel-1A 39634 at about 693 km and 98 degrees, plus negatives) for `objects_near`; independent re-filter, the closest filtered row ranked top (the NuSat-47 vs Fengyun-1C pair, 66743 and 31441, was only in Friday's snapshot; use it only from a pinned fixture), exclusions, km to meters for `close_approaches`.
 Agent tool-calling (A writes rows, runs Grok loop from B): tool selection (`json_match`), arguments (`numeric_close`, unit conversion, mission phrases), no-call and out-of-scope rows, multi-step, error handling, paraphrases, multi-turn follow-ups, call budget. Two configurations: the headline eval hides `close_approaches` from the agent; the tool-calling eval exposes all tools but does not score shell choice against SOCRATES.
 Optional Grok judge for explanation clarity, reported separately.
 

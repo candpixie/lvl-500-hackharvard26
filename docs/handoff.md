@@ -1,11 +1,14 @@
 # Handoff: read this first (Sat Oct 17, 12:45 PM EDT)
 
+> **Status update (Sat afternoon):** parts of this document are superseded. The team built `api/` (FastAPI, port 8000, `/ask`), the Grok loop (`api/agent.py`, importable as `from agent import run_agent`), and a placement model (`pipeline/orbit_data.py`, `pipeline/scoring.py`). The "Python server in `server/` on port 8787" and `/api/ask` shapes below were an earlier proposal and are withdrawn; use `docs/chalk-contract.md` and `docs/chalk-teammates.md`. The Chalk functions section still applies (see `docs/api.md`).
+
+
 This is the one document that explains the project, what exists, what we decided, and what to do next. `chalkclaude.md` (repo root) is the same material in a terse form for Claude. It is named `chalkclaude.md` so it does not overwrite anyone's own `CLAUDE.md`; Claude Code only auto-loads a file named `CLAUDE.md`, so add `@chalkclaude.md` to your own `CLAUDE.md` or ask Claude to read it. `docs/split.md` is the two-person work split. `docs/data.md` is the data inventory. `README.md` is the pitch.
 
 ## 1. What we are building
 A simulation for putting items in space. The user picks an altitude and inclination (maybe size) and sees where it sits among every tracked satellite and piece of debris on a 3D globe, how crowded that orbital shell is, what is nearby, and better spots. A Grok agent (text or voice) answers questions with real numbers and flies the globe to the answer.
 
-Why now: SpaceX filed (Jan 30 2026) for up to 1 million orbital data center satellites, and low Earth orbit holds about 29,000 tracked objects today. Debris piles up at 750 to 850 km, where air drag cannot clear it for a very long time; working satellites crowd 450 to 500 km. Real example this week: NuSat-47 is predicted to pass 12 m from a Fengyun-1C debris piece at 14.5 km/s on Oct 22 (SOCRATES prediction, verify before using on a slide).
+Why now: SpaceX filed (Jan 30 2026) for up to 1 million orbital data center satellites, and low Earth orbit holds about 29,000 tracked objects today. Debris piles up at 750 to 850 km, where air drag cannot clear it for a very long time; working satellites crowd 450 to 500 km. Example from Friday night's SOCRATES file: NuSat-47 predicted to pass 12 m from a Fengyun-1C debris piece at 14.5 km/s on Oct 22. That pair is NOT in the current snapshot (the 7-day window rolled forward), so do not cite it as current; pick an example from `data/out/close_approaches.json` and verify it before using on a slide.
 
 History: our first idea was whether an orbital data center pays back its carbon debt. We switched to the placement simulation. The old work is in `archive/carbon-payback/`.
 
@@ -31,7 +34,7 @@ History: our first idea was whether an orbital data center pays back its carbon 
 - Rules: say "crowding" or "close approach", never "collision probability" unless quoting SOCRATES. Every number on screen has a source. Grok media is illustration and is labeled so. Verify decay times before any slide.
 
 ## 5. Architecture
-Browser (text, later voice) -> `/api/ask` on a small server (middleware in `web/vite.config.ts`, holds the keys) -> Grok with function calling -> Chalk functions -> Grok writes the spoken answer -> server returns `{status, speak_text, display_text, ui_events[], evidence[], caveats[], trace_id, snapshot_id}` -> browser plays voice and applies UI events. Optional `/api/visual` asks Grok Imagine for an illustration after the answer, never blocking it. Also `GET /api/manifest` ("data as of") and `GET /api/health`.
+Browser (text, later voice) -> `/api/ask` on a small **Python** server in `server/` (Vite proxies `/api` to it; holds the keys; see `docs/api.md` for why it is Python and not a Vite middleware) -> Grok with function calling -> Chalk functions -> Grok writes the spoken answer -> server returns `{status, speak_text, display_text, ui_events[], evidence[], caveats[], trace_id, snapshot_id}` -> browser plays voice and applies UI events. Optional `/api/visual` asks Grok Imagine for an illustration after the answer, never blocking it. Also `GET /api/manifest` ("data as of") and `GET /api/health`.
 
 Request: `POST /api/ask {session_id, text, mode: text|voice, context: {altitude_km, inclination_deg, selected_norad}}`.
 
@@ -52,7 +55,7 @@ UI events: `focusOrbit{altitude_km, inclination_deg}`, `selectObject{norad}`, op
 ## 6. Evals (Chalk Agent Evals: dataset rows, a task function, scorers returning 0 to 1)
 Headline (hard-coded, no LLM): `shell_safety` scores the shell `recommend_orbit` returns by the rank of its SOCRATES near-miss rate per object among all shells, against a random-pick baseline and against the web app's current lowest-raw-count rule. Build the answer key from all 195,841 SOCRATES rows, not the 500 committed, and keep `close_approaches` hidden from the agent in this eval. Also `crowding_validity` (does the density index correlate with near-miss rate), `mission_fit` (inclination within a hand-labeled range, for example 96 to 99 degrees for sun-synchronous), `grounding` (every number in the answer appears in tool output), `guardrails` (no "safe", no "collision probability", empty regions say "no tracked objects", coverage gap disclosed), `json_valid`. An optional Grok judge for explanation clarity, reported separately.
 
-Tool accuracy (plain tests on a pinned data snapshot): recompute `shell_crowding` independently and check sums and edges; check `objects_near` against a brute-force oracle plus known objects (ISS 25544 at about 420 km and 51.6 degrees, Sentinel-1A 39634 at about 693 km and 98 degrees, and negatives); re-filter SOCRATES independently, check the NuSat-47 vs Fengyun-1C pair (66743 and 31441) ranks top, exclusions hold, and 0.012 km shows as 12 meters.
+Tool accuracy (plain tests on a pinned data snapshot): recompute `shell_crowding` independently and check sums and edges; check `objects_near` against a brute-force oracle plus known objects (ISS 25544 at about 420 km and 51.6 degrees, Sentinel-1A 39634 at about 693 km and 98 degrees, and negatives); re-filter SOCRATES independently, check the closest filtered row ranks top (the NuSat-47 vs Fengyun-1C pair, 66743 and 31441, was only in Friday's snapshot; use it only from a pinned fixture), exclusions hold, and 0.012 km shows as 12 meters.
 
 Agent tool-calling (Chalk eval; agent output includes `tool_calls` and `answer`): tool selection, arguments (tolerance about 25 km and 2 degrees; unit conversion; mission phrases), no-call and out-of-scope rows, multi-step, error handling, paraphrases, multi-turn follow-ups, call budget. Rough pass bars (our estimates): 95% selection, 90% arguments, 100% fidelity.
 
