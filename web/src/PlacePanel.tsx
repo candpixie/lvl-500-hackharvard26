@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { placeAt, type PlaceResult } from './events.ts'
 import { majorityLabel, shellForAltitude, shellRange, shellTotal, type ShellRow } from './shells.ts'
 
 function formatCount(value: number) {
@@ -22,6 +24,16 @@ export default function PlacePanel({
   onDebrisOnly,
 }: PlacePanelProps) {
   const current = shells ? shellForAltitude(shells, altitude) : null
+  const [place, setPlace] = useState<PlaceResult | null>(null)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void placeAt(altitude)
+        .then(setPlace)
+        .catch(() => setPlace(null))
+    }, 220)
+    return () => window.clearTimeout(timer)
+  }, [altitude])
 
   return (
     <div className="panel">
@@ -32,6 +44,19 @@ export default function PlacePanel({
           <p className="shell-count">{formatCount(shellTotal(current))}</p>
           <p className="shell-range">{shellRange(current)}</p>
           <p className="shell-majority">{majorityLabel(current)}</p>
+          {place && (
+            <p
+              className="shell-note"
+              title={`${place.note}. Expected collisions per year is a first-order model. Lifetime is approximate.`}
+            >
+              Score {place.score}/100 · wreckage stays ~{Math.round(place.dead_sat_lifetime_years)} yr
+              <br />
+              {place.collisions_per_year < 1
+                ? `${place.collisions_per_year.toFixed(2)} collisions/yr`
+                : `${Math.round(place.collisions_per_year).toLocaleString('en-US')} collisions/yr`}
+              {' · 1,000 × 4 m sats · tracked objects only, lower bound'}
+            </p>
+          )}
           <p
             className="source"
             title="CelesTrak SATCAT, objects with no decay date. Mean altitude is (apogee + perigee) / 2."

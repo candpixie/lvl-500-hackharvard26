@@ -3,14 +3,19 @@ import Globe from 'globe.gl'
 import {
   BufferGeometry,
   Float32BufferAttribute,
+  Line,
+  LineBasicMaterial,
   Points,
   ShaderMaterial,
   type MeshPhongMaterial,
 } from 'three'
 import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
+import AgentPanel from './AgentPanel.tsx'
+import type { FocusOrbit } from './events.ts'
 import type { OrbitCounts, WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
+import { orbitLine, ORBIT_COLOR } from './place.ts'
 import { shellBounds, type ShellRow } from './shells.ts'
 
 const LEGEND: { key: keyof OrbitCounts; label: string; color: string }[] = [
@@ -115,6 +120,7 @@ export default function App() {
   const hostRef = useRef<HTMLDivElement>(null)
   const applyShellRef = useRef<(altitudeKm: number) => void>(() => {})
   const debrisRef = useRef<(on: boolean) => void>(() => {})
+  const flyRef = useRef<(focus: FocusOrbit) => void>(() => {})
   const [status, setStatus] = useState<Status>({ state: 'loading' })
   const [altitude, setAltitude] = useState(START_ALTITUDE)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
@@ -197,6 +203,22 @@ export default function App() {
       material.uniforms.uDebrisOnly.value = on ? 1 : 0
     }
 
+    let orbit: Line | null = null
+    const orbitMaterial = new LineBasicMaterial({ color: ORBIT_COLOR, transparent: true, opacity: 0.9 })
+    flyRef.current = (focus) => {
+      const { positions } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
+      if (orbit) {
+        globe.scene().remove(orbit)
+        orbit.geometry.dispose()
+      }
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+      orbit = new Line(geometry, orbitMaterial)
+      globe.scene().add(orbit)
+      const lat = Math.max(-55, Math.min(55, 90 - focus.inclination_deg))
+      globe.pointOfView({ lat, lng: 20, altitude: 1.45 }, 1400)
+    }
+
     globe.renderer().domElement.addEventListener('webglcontextlost', (event: Event) => {
       event.preventDefault()
       setStatus({ state: 'error', message: 'WebGL stopped. The orbit map cannot draw without it.' })
@@ -244,9 +266,12 @@ export default function App() {
     return () => {
       applyShellRef.current = () => {}
       debrisRef.current = () => {}
+      flyRef.current = () => {}
       window.removeEventListener('resize', fit)
       worker.terminate()
       material.dispose()
+      orbitMaterial.dispose()
+      orbit?.geometry.dispose()
       cloud?.geometry.dispose()
       globe._destructor()
     }
@@ -287,9 +312,9 @@ export default function App() {
     <>
       <div ref={hostRef} className="viewport" />
       <aside className="hud">
-        <p className="kicker">Orbit crowding</p>
+        <p className="kicker">Orbit Payback</p>
         <h1>How crowded is this altitude?</h1>
-        <p className="dek">That shell stays bright.</p>
+        <p className="dek">If we put something in orbit, that shell stays bright.</p>
         <p className="asof">{epoch ? `Data as of ${formatEpoch(epoch)}` : 'CelesTrak GP'}</p>
         <PlacePanel
           altitude={altitude}
@@ -309,6 +334,12 @@ export default function App() {
         </ul>
         <p className="source">CelesTrak GP</p>
       </aside>
+      <AgentPanel
+        onFocus={(focus) => {
+          setAltitude(Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10)))
+          flyRef.current(focus)
+        }}
+      />
       {overlay}
     </>
   )

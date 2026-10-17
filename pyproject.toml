@@ -2,7 +2,19 @@
 name = "orbit-payback-pipeline"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["numpy", "pandas", "openpyxl", "skyfield"]
+dependencies = [
+    "numpy",
+    "pandas",
+    "openpyxl",
+    "skyfield",
+    "fastapi",
+    "uvicorn[standard]",
+    "openai",
+    "httpx",
+    "python-dotenv",
+    "pydantic",
+    "python-multipart",
+]
 
 [tool.uv]
 package = false
