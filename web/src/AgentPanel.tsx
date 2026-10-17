@@ -120,29 +120,30 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
 
   return (
     <aside className="hud hud-agent">
-      <p className="kicker">Grok</p>
-      <h1>Where should it go?</h1>
-      <p className="dek">Speak or type. Chalk reasons on our catalog. The globe flies to that shell.</p>
-      <div className="chips">
+      <div className="command-head">
+        <p className="kicker">Grok</p>
+        <div className="chips">
         {PROMPTS.map((item) => (
           <button key={item.label} type="button" className="chip" disabled={busy} onClick={() => setQuestion(item.question)}>
             {item.label}
           </button>
         ))}
+        </div>
       </div>
-      <textarea
-        className="ask-box"
-        value={question}
-        disabled={busy}
-        onChange={(event) => setQuestion(event.target.value)}
-        rows={3}
-      />
       <div className="ask-row">
+        <input
+          className="ask-box"
+          type="text"
+          value={question}
+          disabled={busy}
+          placeholder="Ask Grok where to put it…"
+          onChange={(event) => setQuestion(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void run(false)
+          }}
+        />
         <button type="button" className="ask-go" disabled={busy} onClick={() => void run(false)}>
           {busy ? 'Asking…' : 'Ask'}
-        </button>
-        <button type="button" className="ask-go ask-voice" disabled={busy} onClick={() => void run(true)}>
-          Ask + speak
         </button>
         <button type="button" className="ask-go ask-voice" disabled={busy && !listening} onClick={() => void toggleListen()}>
           {listening ? 'Stop' : 'Talk'}

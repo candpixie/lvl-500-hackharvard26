@@ -12,6 +12,10 @@ function formatCount(value: number) {
   return value.toLocaleString('en-US')
 }
 
+function formatCollisionCount(value: number) {
+  return value < 1 ? value.toFixed(2) : Math.round(value).toLocaleString('en-US')
+}
+
 function yearsLabel(years: number) {
   if (years < 2) return 'about a year'
   return `~${Math.round(years).toLocaleString('en-US')} yr`
@@ -81,20 +85,21 @@ export default function PlacePanel({
       {!shells && !shellError && <p className="shell-note">Loading shell counts</p>}
       {current && (
         <>
-          <p className="shell-count">{formatCount(shellTotal(current))}</p>
-          <p className="shell-range">{shellRange(current)}</p>
+          <p className="shell-count num">{formatCount(shellTotal(current))}</p>
+          <p className="shell-range num">{shellRange(current)}</p>
           <p className="shell-majority">{majorityLabel(current)}</p>
           {place && (
             <p
               className="shell-note"
               title={`${place.note}. Expected collisions per year is a first-order model. Lifetime is approximate.`}
             >
-              Score {place.score}/100 · wreckage stays {yearsLabel(place.dead_sat_lifetime_years)}
+              <span className="num">{Math.round(place.score)}/100</span>, higher is safer · wreckage stays
+              <span className="num">{yearsLabel(place.dead_sat_lifetime_years)}</span>
               <br />
-              {place.collisions_per_year < 1
-                ? `${place.collisions_per_year.toFixed(2)} collisions/yr`
-                : `${Math.round(place.collisions_per_year).toLocaleString('en-US')} collisions/yr`}
-              {` · ${formatCount(count)} × 4 m sats · tracked objects only, lower bound`}
+              <span className="num">{formatCollisionCount(place.collisions_per_year)}</span> expected collisions per
+              year (first-order model)
+              <br />
+              <span className="num">{formatCount(count)} × 4 m</span> sats · tracked objects only, lower bound
             </p>
           )}
           <p
@@ -137,8 +142,8 @@ export default function PlacePanel({
 
       <label className="field">
         <span className="field-label">
-          Altitude
-          <span>{Math.round(altitude).toLocaleString('en-US')} km</span>
+          <span className="mark">Altitude</span>
+          <span className="num">{Math.round(altitude).toLocaleString('en-US')} km</span>
         </span>
         <input
           type="range"
@@ -164,7 +169,11 @@ export default function PlacePanel({
           onChange={(event) => onInclination(Number(event.target.value))}
         />
       </label>
-      <p className="shell-note">4×2×1 m · altitude exaggerated 5.5×</p>
+      <p className="shell-note">
+        4×2×1 m · altitude exaggerated <span className="num">5.5×</span>
+        <br />
+        Enlarged, not to scale
+      </p>
 
       <button type="button" className="quieter" onClick={onVisualizeShell}>
         <strong>Visualize this shell</strong>

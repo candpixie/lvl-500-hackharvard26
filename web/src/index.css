@@ -9,7 +9,7 @@ body,
 }
 
 body {
-  font-family: 'IBM Plex Sans', ui-sans-serif, sans-serif;
+  font-family: 'Geist Variable', ui-sans-serif, sans-serif;
   color: #c9d6e3;
 }
 
@@ -26,23 +26,9 @@ body {
   height: 100% !important;
 }
 
-.kicker,
-.asof,
-.legend,
-.source,
-.shell-count,
-.shell-range,
-.shell-majority,
-.shell-note,
-.scale-note,
-.field,
-.debris-toggle,
-.inspect-type,
-.inspect-id,
-.inspect dt,
-.inspect dd,
-.status {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+.num {
+  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .hud {
@@ -71,10 +57,13 @@ body {
 }
 
 .kicker,
-.asof,
-.scale-note {
+.asof {
   margin: 0;
   font-size: 11px;
+}
+
+.hud > .kicker,
+.mark {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -86,10 +75,11 @@ body {
 h1 {
   margin: 6px 0 0;
   max-width: 12em;
-  font-size: 18px;
+  font-family: 'Jost Variable', ui-sans-serif, sans-serif;
+  font-size: 32px;
   font-weight: 500;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
 }
 
 .dek {
@@ -100,8 +90,7 @@ h1 {
   color: rgba(201, 214, 227, 0.74);
 }
 
-.asof,
-.scale-note {
+.asof {
   margin-top: 6px;
   color: rgba(201, 214, 227, 0.48);
 }
@@ -122,8 +111,6 @@ h1 {
 .count-label {
   margin-top: 8px;
   font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
   color: rgba(201, 214, 227, 0.62);
 }
 
@@ -169,8 +156,6 @@ h1 {
   place-items: center;
   padding: 24px;
   font-size: 13px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   text-align: center;
   color: rgba(201, 214, 227, 0.8);
   background: rgba(5, 7, 11, 0.72);
@@ -198,8 +183,6 @@ h1 {
 .presets,
 .quieter {
   font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .panel-kicker {
@@ -368,9 +351,7 @@ h1 {
   border-bottom: 1px solid rgba(242, 165, 65, 0.75);
   background: transparent;
   color: #f2a541;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -461,9 +442,7 @@ h1 {
 }
 
 .inspect-type {
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 12px;
 }
 
 .inspect h2 {
@@ -476,9 +455,7 @@ h1 {
 
 .inspect-id {
   margin-top: 6px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
   color: rgba(201, 214, 227, 0.5);
 }
 
@@ -494,9 +471,7 @@ h1 {
 }
 
 .inspect dt {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 12px;
   color: rgba(201, 214, 227, 0.48);
 }
 
@@ -509,28 +484,38 @@ h1 {
 }
 
 .hud-agent {
-  left: auto;
-  right: 24px;
-  width: min(320px, calc(100vw - 48px));
-  max-height: calc(100vh - 40px);
-  overflow: auto;
+  top: auto;
+  right: auto;
+  bottom: 24px;
+  left: 50%;
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 48px));
+  max-height: none;
+  transform: translateX(-50%);
+  padding: 12px 14px;
+  background: rgba(5, 7, 11, 0.84);
+  border: 1px solid rgba(201, 214, 227, 0.14);
 }
 
 .hud-agent::before {
-  left: auto;
-  right: 0;
-  background: linear-gradient(-90deg, rgba(5, 7, 11, 0.94) 0%, rgba(5, 7, 11, 0.78) 62%, rgba(5, 7, 11, 0) 100%);
+  display: none;
 }
 
-.hud-agent h1 {
-  max-width: 14em;
+.command-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hud-agent .kicker {
+  flex: 0 0 auto;
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 12px;
+  margin-top: 0;
 }
 
 .chip,
@@ -556,15 +541,17 @@ h1 {
 
 .ask-box {
   display: block;
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
   box-sizing: border-box;
-  margin-top: 10px;
-  padding: 8px 10px;
-  resize: vertical;
-  min-height: 4.4em;
+  margin-top: 0;
+  padding: 7px 10px;
+  resize: none;
+  min-height: 0;
   font: inherit;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.3;
   color: #c9d6e3;
   background: rgba(5, 7, 11, 0.45);
   border: 1px solid rgba(201, 214, 227, 0.28);
@@ -572,18 +559,20 @@ h1 {
 
 .ask-row {
   display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-top: 8px;
 }
 
 .ask-go {
+  flex: 0 0 auto;
   padding: 7px 10px;
   color: #05070b;
   background: #e7f27a;
   border: 1px solid #e7f27a;
   font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .ask-voice {
@@ -828,11 +817,7 @@ body.is-sim .inspect::before {
 }
 
 @media (max-height: 760px) {
-  .hud {
+  .hud:not(.hud-agent) {
     top: 14px;
-  }
-
-  h1 {
-    font-size: 18px;
   }
 }

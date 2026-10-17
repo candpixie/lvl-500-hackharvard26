@@ -25,6 +25,7 @@ The app answers: *if we put something in orbit, where does it do the least harm?
   2009 Iridium-Cosmos collision). Drag can't clear it for centuries. **Junk lives where nature can't clean it up.**
 - So low shells win: a failure at 500 km clears itself in about a decade. That matches SpaceX's own plan to
   start below 600 km.
+- Click **Show debris only** while the bright shell is up, so the amber debris is obvious, then turn it off.
 
 ## 2. Prizes and what each one requires
 
