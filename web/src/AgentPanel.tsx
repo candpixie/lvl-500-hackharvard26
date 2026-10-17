@@ -2,10 +2,12 @@ import { useRef, useState } from 'react'
 import {
   askGrok,
   eventsFromAsk,
+  focusWithMission,
   imagineGrok,
   listenGrok,
   speakGrok,
   type AskContext,
+  type FocusOrbit,
   type UiEvent,
 } from './events.ts'
 
@@ -17,11 +19,14 @@ const PROMPTS = [
 ]
 
 interface AgentPanelProps {
+  altitude: number
+  count: number
   context: AskContext
+  onFocus: (focus: FocusOrbit | null) => void
   onUiEvent: (event: UiEvent) => void
 }
 
-export default function AgentPanel({ context, onUiEvent }: AgentPanelProps) {
+export default function AgentPanel({ altitude, count, context, onFocus, onUiEvent }: AgentPanelProps) {
   const [question, setQuestion] = useState(PROMPTS[0].question)
   const [answer, setAnswer] = useState('')
   const [sources, setSources] = useState<string[]>([])
@@ -31,6 +36,7 @@ export default function AgentPanel({ context, onUiEvent }: AgentPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [hasAudio, setHasAudio] = useState(false)
   const [image, setImage] = useState<{ src: string; label: string } | null>(null)
+  const [focus, setFocus] = useState<FocusOrbit | null>(null)
   const playerRef = useRef<HTMLAudioElement>(null)
   const objectUrl = useRef<string | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -44,6 +50,8 @@ export default function AgentPanel({ context, onUiEvent }: AgentPanelProps) {
     setSources([])
     setReasoner('')
     setImage(null)
+    setFocus(null)
+    onFocus(null)
     if (objectUrl.current) {
       URL.revokeObjectURL(objectUrl.current)
       objectUrl.current = null
@@ -54,6 +62,8 @@ export default function AgentPanel({ context, onUiEvent }: AgentPanelProps) {
       setAnswer(result.answer)
       setSources(result.tool_calls.map((call) => call.name))
       setReasoner(result.reasoner ?? '')
+      const nextFocus = focusWithMission(result)
+      if (nextFocus) setFocus(nextFocus)
       for (const event of eventsFromAsk(result)) onUiEvent(event)
 
       const localOnly = result.reasoner === 'local' || result.reasoner === 'local_fallback'
@@ -69,7 +79,6 @@ export default function AgentPanel({ context, onUiEvent }: AgentPanelProps) {
           })
           .catch(() => {})
       }
-
       if (speak && result.answer) {
         try {
           const blob = await speakGrok(result.answer)
@@ -180,6 +189,17 @@ export default function AgentPanel({ context, onUiEvent }: AgentPanelProps) {
         </button>
       </div>
       {error && <p className="shell-note">{error}</p>}
+      {focus &&
+        Math.abs(focus.altitude_km - altitude) < 25 &&
+        (focus.count == null || focus.count === count) && (
+        <p className="place-here">
+          <span aria-hidden="true">★</span>
+          Put it here · {Math.round(focus.altitude_km)} km · {Math.round(focus.inclination_deg)}°
+          {focus.count != null
+            ? ` · ${focus.count === 1 ? '1 sat' : `${focus.count.toLocaleString('en-US')} sats`}`
+            : ''}
+        </p>
+      )}
       {answer && <p className="answer">{answer}</p>}
       {sources.length > 0 && (
         <p className="source" title="Tracked objects only, lower bound. CelesTrak SATCAT, GP, SOCRATES.">

@@ -3,10 +3,18 @@
 export interface FocusOrbit {
   altitude_km: number
   inclination_deg: number
+  count?: number
+  dims_m?: number[]
+}
+
+export interface AskToolCall {
+  name: string
+  arguments?: Record<string, unknown>
+  result?: unknown
 }
 
 export type UiEvent =
-  | { type: 'focusOrbit'; altitude_km: number; inclination_deg: number }
+  | { type: 'focusOrbit'; altitude_km: number; inclination_deg: number; count?: number; dims_m?: number[] }
   | { type: 'selectObject'; norad: number }
   | { type: 'showApproach'; norad_1: number; norad_2: number }
 
@@ -20,23 +28,81 @@ export interface AskResult {
   answer: string
   focus: FocusOrbit | null
   ui_events?: UiEvent[]
-  tool_calls: { name: string; arguments: Record<string, unknown> }[]
+  tool_calls: AskToolCall[]
   reasoner?: 'chalk' | 'local' | 'local_fallback'
+}
+
+function missionFromArgs(args: Record<string, unknown> | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
+  if (!args) return {}
+  const next: Pick<FocusOrbit, 'count' | 'dims_m'> = {}
+  if (typeof args.count === 'number' && Number.isFinite(args.count) && args.count > 0) {
+    next.count = Math.round(args.count)
+  }
+  if (Array.isArray(args.dims_m) && args.dims_m.length > 0) {
+    const dims = args.dims_m.map(Number).filter((value) => Number.isFinite(value))
+    if (dims.length > 0) next.dims_m = dims
+  }
+  return next
+}
+
+function missionFromCalls(calls: AskToolCall[] | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
+  if (!calls?.length) return {}
+  const first = calls[0]
+  if (first.name !== 'rank_shells' && first.name !== 'place_satellites') return {}
+  return missionFromArgs(first.arguments)
+}
+
+function missionFromAny(calls: AskToolCall[] | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
+  if (!calls) return {}
+  for (const call of calls) {
+    if (call.name === 'rank_shells' || call.name === 'place_satellites') {
+      return missionFromArgs(call.arguments)
+    }
+  }
+  return {}
+}
+
+/** Copy count/size from Ask onto focus so the HUD scores the same mission. */
+export function focusWithMission(result: AskResult): FocusOrbit | null {
+  if (!result.focus) return null
+  let count = result.focus.count
+  let dims = result.focus.dims_m
+  const chalk = result.tool_calls.find((call) => call.name === 'ask_chalk')
+  const body = chalk?.result
+  if (body && typeof body === 'object') {
+    const nested = body as { focus?: FocusOrbit; tool_calls?: AskToolCall[] }
+    const fromChalk = missionFromCalls(nested.tool_calls)
+    count ??= nested.focus?.count ?? fromChalk.count
+    dims ??= nested.focus?.dims_m ?? fromChalk.dims_m
+  }
+  const fromLocal = missionFromCalls(result.tool_calls)
+  const fromAny = missionFromAny(result.tool_calls)
+  count ??= fromLocal.count ?? fromAny.count
+  dims ??= fromLocal.dims_m ?? fromAny.dims_m
+  return {
+    ...result.focus,
+    ...(count != null ? { count } : {}),
+    ...(dims ? { dims_m: dims } : {}),
+  }
 }
 
 /** Normalize ask payload into a list of UI events (supports legacy `focus` only). */
 export function eventsFromAsk(result: AskResult): UiEvent[] {
-  if (result.ui_events?.length) return result.ui_events
-  if (result.focus) {
+  const focus = focusWithMission(result)
+  const others = (result.ui_events ?? []).filter((event) => event.type !== 'focusOrbit')
+  if (focus) {
     return [
       {
         type: 'focusOrbit',
-        altitude_km: result.focus.altitude_km,
-        inclination_deg: result.focus.inclination_deg,
+        altitude_km: focus.altitude_km,
+        inclination_deg: focus.inclination_deg,
+        count: focus.count,
+        dims_m: focus.dims_m,
       },
+      ...others,
     ]
   }
-  return []
+  return result.ui_events?.length ? result.ui_events : []
 }
 
 export async function askGrok(question: string, context?: AskContext): Promise<AskResult> {
@@ -134,11 +200,16 @@ export interface PlaceResult {
   note: string
 }
 
-export async function placeAt(altKm: number, incDeg = 53, count = 1000): Promise<PlaceResult> {
+export async function placeAt(
+  altKm: number,
+  incDeg = 53,
+  count = 1000,
+  dims: number[] = [4, 2, 1],
+): Promise<PlaceResult> {
   const response = await fetch('/place', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ alt_km: altKm, inc_deg: incDeg, dims_m: [4, 2, 1], count }),
+    body: JSON.stringify({ alt_km: altKm, inc_deg: incDeg, dims_m: dims, count }),
   })
   if (!response.ok) throw new Error(`Place failed (${response.status})`)
   return response.json() as Promise<PlaceResult>
@@ -154,8 +225,8 @@ export interface RankRow {
   reason: string
 }
 
-export async function rankShells(count: number, top = 5): Promise<RankRow[]> {
-  const response = await fetch(`/rank?dims=4,2,1&count=${count}&top=${top}`)
+export async function rankShells(count: number, top = 5, dims: number[] = [4, 2, 1]): Promise<RankRow[]> {
+  const response = await fetch(`/rank?dims=${dims.join(',')}&count=${count}&top=${top}`)
   if (!response.ok) throw new Error(`Rank failed (${response.status})`)
   const payload = (await response.json()) as { rows?: RankRow[] }
   return payload.rows ?? []

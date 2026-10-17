@@ -190,6 +190,105 @@ h1 {
   color: #e7f27a;
 }
 
+.step {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(201, 214, 227, 0.12);
+}
+
+.step-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-family: 'Geist Variable', ui-sans-serif, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+  color: #c9d6e3;
+}
+
+.step-num {
+  color: #e7f27a;
+  font-size: 12px;
+}
+
+.step-number {
+  width: 5.5em;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 6px 8px;
+  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-size: 13px;
+  color: #c9d6e3;
+  background: rgba(5, 7, 11, 0.55);
+  border: 1px solid rgba(201, 214, 227, 0.28);
+}
+
+.suggest {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  color: #e7f27a;
+  background: transparent;
+  border: 1px solid rgba(231, 242, 122, 0.45);
+  cursor: pointer;
+}
+
+.suggest:disabled {
+  color: rgba(201, 214, 227, 0.4);
+  border-color: rgba(201, 214, 227, 0.18);
+  cursor: default;
+}
+
+.step .presets {
+  margin-bottom: 0;
+}
+
+.step .shell-count {
+  margin-top: 12px;
+}
+
+.shell-line {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(201, 214, 227, 0.74);
+}
+
+.saved-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.saved-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.7fr 1.3fr 0.9fr;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 0;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  color: #c9d6e3;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(201, 214, 227, 0.12);
+  cursor: pointer;
+}
+
+.saved-row:hover {
+  color: #e7f27a;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -258,6 +357,88 @@ h1 {
 
 .beat-presets {
   margin-top: 12px;
+}
+
+.step-impact {
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.impact-score {
+  margin-top: 2px;
+}
+
+.impact-rating {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #e7f27a;
+  cursor: help;
+  text-align: left;
+}
+
+.impact-rating[data-tone='mixed'] {
+  color: #c9d6e3;
+}
+
+.impact-rating[data-tone='crowded'] {
+  color: #f2a541;
+}
+
+.impact-empty {
+  cursor: default;
+  color: rgba(201, 214, 227, 0.55);
+}
+
+.impact-num {
+  font-size: 56px;
+  font-weight: 500;
+  letter-spacing: -0.07em;
+  line-height: 0.85;
+}
+
+.impact-den {
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.5;
+}
+
+.impact-verdict {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.impact-tip {
+  display: none;
+  margin-top: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #c9d6e3;
+  background: rgba(5, 7, 11, 0.92);
+  border: 1px solid rgba(231, 242, 122, 0.35);
+}
+
+.impact-score:hover .impact-tip,
+.impact-score:focus-within .impact-tip {
+  display: block;
+}
+
+.impact-tip p {
+  margin: 0;
+}
+
+.impact-tip p + p {
+  margin-top: 8px;
+  color: rgba(201, 214, 227, 0.62);
 }
 
 .miss-card {
@@ -584,6 +765,22 @@ h1 {
 .chip:disabled {
   opacity: 0.45;
   cursor: wait;
+}
+
+.place-here {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: #f5c542;
+}
+
+.place-here span {
+  font-size: 22px;
+  line-height: 1;
 }
 
 .answer {
