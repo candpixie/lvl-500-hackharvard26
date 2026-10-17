@@ -215,6 +215,15 @@ h1 {
   font-size: 12px;
 }
 
+.place-query {
+  margin-top: 12px;
+}
+
+.place-presets {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
 .step-number {
   width: 5.5em;
   box-sizing: border-box;
@@ -225,6 +234,10 @@ h1 {
   color: #c9d6e3;
   background: rgba(5, 7, 11, 0.55);
   border: 1px solid rgba(201, 214, 227, 0.28);
+}
+
+input.place-input {
+  width: 100%;
 }
 
 .suggest {
@@ -269,11 +282,67 @@ h1 {
   gap: 2px;
 }
 
+.saved-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.saved-remove {
+  border: 0;
+  background: transparent;
+  color: rgba(201, 214, 227, 0.55);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 6px;
+}
+
+.saved-remove:hover {
+  color: #e7f27a;
+}
+
+.clock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 8px;
+}
+
+.clock-readout {
+  margin: 0;
+}
+
+.rate-row {
+  display: flex;
+  gap: 4px;
+}
+
+.rate-row button {
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #c9d6e3;
+  background: transparent;
+  border: 1px solid rgba(201, 214, 227, 0.28);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.rate-row button[aria-pressed='true'] {
+  color: #05070b;
+  background: #e7f27a;
+  border-color: #e7f27a;
+}
+
 .saved-row {
   display: grid;
   grid-template-columns: 1.4fr 0.7fr 1.3fr 0.9fr;
   gap: 6px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 6px 0;
   text-align: left;
   font: inherit;

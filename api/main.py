@@ -17,6 +17,7 @@ from api.data import (
     DEFAULT_DIMS_M,
     get_close_approaches,
     place_satellites,
+    rank_locations,
     rank_shells,
     shell_rows,
     warmup,
@@ -110,6 +111,18 @@ def get_shells():
 def post_place(body: PlaceBody):
     try:
         return place_satellites(body.alt_km, body.inc_deg, body.dims_m, body.count)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/locations")
+def get_locations(
+    region: str,
+    alt_km: float | None = None,
+    top: int = Query(default=5, ge=1, le=12),
+):
+    try:
+        return rank_locations(region, alt_km, top)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 

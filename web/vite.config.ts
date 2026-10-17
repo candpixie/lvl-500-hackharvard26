@@ -55,6 +55,7 @@ export default defineConfig({
       '/ask': 'http://127.0.0.1:8000',
       '/speak': 'http://127.0.0.1:8000',
       '/place': 'http://127.0.0.1:8000',
+      '/locations': 'http://127.0.0.1:8000',
       '/rank': 'http://127.0.0.1:8000',
       '/shells': 'http://127.0.0.1:8000',
       '/close_approaches': 'http://127.0.0.1:8000',

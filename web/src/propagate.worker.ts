@@ -90,6 +90,17 @@ function hold(from: Float32Array, to: Float32Array, offset: number) {
   to[offset + 2] = from[offset + 2]
 }
 
+let rate = 1
+let simMs = Date.now()
+let lastReal = performance.now()
+
+self.onmessage = (event: MessageEvent<{ kind?: string; rate?: number }>) => {
+  const next = event.data?.rate
+  if (event.data?.kind === 'rate' && typeof next === 'number' && Number.isFinite(next) && next > 0) {
+    rate = next
+  }
+}
+
 async function main() {
   let objects: CatalogObject[] = []
   try {
@@ -169,13 +180,17 @@ async function main() {
       kinds,
       epoch: latestEpoch.slice(0, 10),
       facts,
+      timeMs: simMs,
     },
     [colors.buffer, firstFrame.buffer, altitudes.buffer, kinds.buffer],
   )
 
   const tick = () => {
     const started = performance.now()
-    const tickNow = new Date()
+    const elapsed = started - lastReal
+    lastReal = started
+    simMs += rate * elapsed
+    const tickNow = new Date(simMs)
     const tickGmst = gstime(tickNow)
     const frame = new Float32Array(livePositions.length)
     for (let i = 0; i < kept.length; i++) {
@@ -184,9 +199,11 @@ async function main() {
     }
     livePositions.set(frame)
     const copy = new Float32Array(livePositions)
-    post({ kind: 'positions', positions: copy }, [copy.buffer])
-    setTimeout(tick, Math.max(0, 1000 - (performance.now() - started)))
+    post({ kind: 'positions', positions: copy, timeMs: simMs }, [copy.buffer])
+    const gap = rate > 1 ? 160 : 1000
+    setTimeout(tick, Math.max(0, gap - (performance.now() - started)))
   }
+  lastReal = performance.now()
   setTimeout(tick, 1000)
 }
 

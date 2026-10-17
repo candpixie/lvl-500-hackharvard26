@@ -33,6 +33,9 @@ export type WorkerOut =
       kinds: Float32Array
       epoch: string
       facts: ObjectFact[]
+      timeMs: number
     }
-  | { kind: 'positions'; positions: Float32Array }
+  | { kind: 'positions'; positions: Float32Array; timeMs: number }
   | { kind: 'error'; message: string }
+
+export type WorkerIn = { kind: 'rate'; rate: number }

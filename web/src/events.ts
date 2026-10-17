@@ -5,6 +5,10 @@ export interface FocusOrbit {
   inclination_deg: number
   count?: number
   dims_m?: number[]
+  latitude_deg?: number
+  longitude_deg?: number
+  raan_deg?: number
+  place?: string
 }
 
 export interface AskToolCall {
@@ -14,7 +18,17 @@ export interface AskToolCall {
 }
 
 export type UiEvent =
-  | { type: 'focusOrbit'; altitude_km: number; inclination_deg: number; count?: number; dims_m?: number[] }
+  | {
+      type: 'focusOrbit'
+      altitude_km: number
+      inclination_deg: number
+      count?: number
+      dims_m?: number[]
+      latitude_deg?: number
+      longitude_deg?: number
+      raan_deg?: number
+      place?: string
+    }
   | { type: 'selectObject'; norad: number }
   | { type: 'showApproach'; norad_1: number; norad_2: number }
 
@@ -48,14 +62,14 @@ function missionFromArgs(args: Record<string, unknown> | undefined): Pick<FocusO
 function missionFromCalls(calls: AskToolCall[] | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
   if (!calls?.length) return {}
   const first = calls[0]
-  if (first.name !== 'rank_shells' && first.name !== 'place_satellites') return {}
+  if (first.name !== 'rank_shells' && first.name !== 'place_satellites' && first.name !== 'rank_locations') return {}
   return missionFromArgs(first.arguments)
 }
 
 function missionFromAny(calls: AskToolCall[] | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
   if (!calls) return {}
   for (const call of calls) {
-    if (call.name === 'rank_shells' || call.name === 'place_satellites') {
+    if (call.name === 'rank_shells' || call.name === 'place_satellites' || call.name === 'rank_locations') {
       return missionFromArgs(call.arguments)
     }
   }
@@ -98,6 +112,10 @@ export function eventsFromAsk(result: AskResult): UiEvent[] {
         inclination_deg: focus.inclination_deg,
         count: focus.count,
         dims_m: focus.dims_m,
+        latitude_deg: focus.latitude_deg,
+        longitude_deg: focus.longitude_deg,
+        raan_deg: focus.raan_deg,
+        place: focus.place,
       },
       ...others,
     ]
@@ -213,6 +231,46 @@ export async function placeAt(
   })
   if (!response.ok) throw new Error(`Place failed (${response.status})`)
   return response.json() as Promise<PlaceResult>
+}
+
+export interface LocationSlot {
+  alt_lo: number
+  alt_hi: number
+  altitude_km: number
+  inclination_deg: number
+  inc_lo: number
+  inc_hi: number
+  reaches_deg: number
+  latitude_deg: number
+  longitude_deg: number
+  raan_deg: number
+  covering_lo: number
+  covering_hi: number
+  band_covers: boolean
+  debris: number
+  total: number
+  satellites: number
+  rocket_bodies: number
+}
+
+export interface LocationRank {
+  region: { id: string; name: string; label: string; min_reach_deg: number }
+  rows: LocationSlot[]
+  busiest?: LocationSlot
+  note: string
+  caveat?: string
+  answer?: string
+}
+
+export async function rankLocations(region: string, altitudeKm?: number, top = 5): Promise<LocationRank> {
+  const params = new URLSearchParams({ region, top: String(top) })
+  if (altitudeKm != null) params.set('alt_km', String(altitudeKm))
+  const response = await fetch(`/locations?${params}`)
+  const payload = (await response.json().catch(() => ({}))) as LocationRank & { detail?: string }
+  if (!response.ok) {
+    throw new Error(typeof payload.detail === 'string' ? payload.detail : `Locations failed (${response.status})`)
+  }
+  return payload
 }
 
 export interface RankRow {
