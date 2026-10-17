@@ -1,0 +1,41 @@
+# Hypothetical 1 kW GPU edge datacenter in LEO
+mission_time = 3.0
+launch = "Starship"
+redundancy_factor = 1.0
+pue = 1.1
+
+[orbit]
+altitude = 510
+sunlight_beta = 67.8
+
+[solar_array]
+area = 2.0         # m^2 — sized for ~2.7 kW (covers compute + overhead)
+panels = 1
+degradation_rate = 0.006
+
+[battery]
+cycles = 5000
+
+[transceiver]
+mass = 500.0       # g
+power = 50.0       # W — laser link terminal
+data_rate = 1000000.0 # Kbps — 1 Gbps optical
+
+[cpu]
+mass = 200.0       # g
+area = 4000.0       # mm^2
+max_power = 250.0   # W
+
+[gpu]
+mass = 2400.0      # g — 1x H100-class
+area = 814.0       # mm^2
+max_power = 700.0  # W — peak
+embodied_kg = 1312.0  # kgCO2e — H100-class: 1.312 tCO2e (source: Andreas Schmidt / ACT data)
+
+[dram]
+capacity = 80.0
+power_per_memory = 0.020
+
+[ssd]
+capacity = 8.0
+average_power = 5.0

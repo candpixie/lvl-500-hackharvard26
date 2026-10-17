@@ -1,0 +1,141 @@
+{
+  "source": "EPA eGRID2023 rev2, SRC2ERTA",
+  "unit": "gCO2e/kWh",
+  "subregions": [
+    {
+      "subregion": "NYUP",
+      "name": "NPCC Upstate NY",
+      "co2e_g_per_kwh": 110.1
+    },
+    {
+      "subregion": "CAMX",
+      "name": "WECC California",
+      "co2e_g_per_kwh": 195.0
+    },
+    {
+      "subregion": "AKMS",
+      "name": "ASCC Miscellaneous",
+      "co2e_g_per_kwh": 237.0
+    },
+    {
+      "subregion": "NEWE",
+      "name": "NPCC New England",
+      "co2e_g_per_kwh": 246.4
+    },
+    {
+      "subregion": "SRVC",
+      "name": "SERC Virginia/Carolina",
+      "co2e_g_per_kwh": 270.5
+    },
+    {
+      "subregion": "RFCE",
+      "name": "RFC East",
+      "co2e_g_per_kwh": 271.8
+    },
+    {
+      "subregion": "NWPP",
+      "name": "WECC Northwest",
+      "co2e_g_per_kwh": 288.2
+    },
+    {
+      "subregion": "AZNM",
+      "name": "WECC Southwest",
+      "co2e_g_per_kwh": 320.3
+    },
+    {
+      "subregion": "ERCT",
+      "name": "ERCOT All",
+      "co2e_g_per_kwh": 334.1
+    },
+    {
+      "subregion": "SRMV",
+      "name": "SERC Mississippi Valley",
+      "co2e_g_per_kwh": 336.5
+    },
+    {
+      "subregion": "FRCC",
+      "name": "FRCC All",
+      "co2e_g_per_kwh": 356.0
+    },
+    {
+      "subregion": "SRSO",
+      "name": "SERC South",
+      "co2e_g_per_kwh": 383.7
+    },
+    {
+      "subregion": "NYCW",
+      "name": "NPCC NYC/Westchester",
+      "co2e_g_per_kwh": 392.7
+    },
+    {
+      "subregion": "SPNO",
+      "name": "SPP North",
+      "co2e_g_per_kwh": 393.6
+    },
+    {
+      "subregion": "SPSO",
+      "name": "SPP South",
+      "co2e_g_per_kwh": 397.2
+    },
+    {
+      "subregion": "SRTV",
+      "name": "SERC Tennessee Valley",
+      "co2e_g_per_kwh": 409.7
+    },
+    {
+      "subregion": "AKGD",
+      "name": "ASCC Alaska Grid",
+      "co2e_g_per_kwh": 410.6
+    },
+    {
+      "subregion": "RFCW",
+      "name": "RFC West",
+      "co2e_g_per_kwh": 415.5
+    },
+    {
+      "subregion": "MROW",
+      "name": "MRO West",
+      "co2e_g_per_kwh": 420.3
+    },
+    {
+      "subregion": "RFCM",
+      "name": "RFC Michigan",
+      "co2e_g_per_kwh": 442.7
+    },
+    {
+      "subregion": "RMPA",
+      "name": "WECC Rockies",
+      "co2e_g_per_kwh": 472.9
+    },
+    {
+      "subregion": "HIMS",
+      "name": "HICC Miscellaneous",
+      "co2e_g_per_kwh": 514.1
+    },
+    {
+      "subregion": "NYLI",
+      "name": "NPCC Long Island",
+      "co2e_g_per_kwh": 539.5
+    },
+    {
+      "subregion": "SRMW",
+      "name": "SERC Midwest",
+      "co2e_g_per_kwh": 566.4
+    },
+    {
+      "subregion": "MROE",
+      "name": "MRO East",
+      "co2e_g_per_kwh": 637.3
+    },
+    {
+      "subregion": "HIOA",
+      "name": "HICC Oahu",
+      "co2e_g_per_kwh": 679.9
+    },
+    {
+      "subregion": "PRMS",
+      "name": "Puerto Rico Miscellaneous",
+      "co2e_g_per_kwh": 702.4
+    }
+  ]
+}

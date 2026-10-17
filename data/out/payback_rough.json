@@ -1,0 +1,58 @@
+[
+ {
+  "scenario": "starcloud-1 (1 H100, Falcon 9)",
+  "grid": "NYUP",
+  "grid_g_per_kwh": 110.1,
+  "debt_kg": 3429,
+  "payback_years": 4.62
+ },
+ {
+  "scenario": "starcloud-1 (1 H100, Falcon 9)",
+  "grid": "SRMV",
+  "grid_g_per_kwh": 336.5,
+  "debt_kg": 3429,
+  "payback_years": 1.51
+ },
+ {
+  "scenario": "starcloud-1 (1 H100, Falcon 9)",
+  "grid": "MROE",
+  "grid_g_per_kwh": 637.3,
+  "debt_kg": 3429,
+  "payback_years": 0.8
+ },
+ {
+  "scenario": "starcloud-1 (1 H100, Falcon 9)",
+  "grid": "dedicated hydro (assumed 20)",
+  "grid_g_per_kwh": 20.0,
+  "debt_kg": 3429,
+  "payback_years": 25.42
+ },
+ {
+  "scenario": "100 kW GPU cluster (100 H100, Starship)",
+  "grid": "NYUP",
+  "grid_g_per_kwh": 110.1,
+  "debt_kg": 179200,
+  "payback_years": 2.41
+ },
+ {
+  "scenario": "100 kW GPU cluster (100 H100, Starship)",
+  "grid": "SRMV",
+  "grid_g_per_kwh": 336.5,
+  "debt_kg": 179200,
+  "payback_years": 0.79
+ },
+ {
+  "scenario": "100 kW GPU cluster (100 H100, Starship)",
+  "grid": "MROE",
+  "grid_g_per_kwh": 637.3,
+  "debt_kg": 179200,
+  "payback_years": 0.42
+ },
+ {
+  "scenario": "100 kW GPU cluster (100 H100, Starship)",
+  "grid": "dedicated hydro (assumed 20)",
+  "grid_g_per_kwh": 20.0,
+  "debt_kg": 179200,
+  "payback_years": 13.28
+ }
+]

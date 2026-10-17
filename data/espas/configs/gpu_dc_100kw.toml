@@ -1,0 +1,41 @@
+# Hypothetical 100 kW GPU mini-datacenter in LEO
+mission_time = 5.0
+launch = "Starship"
+redundancy_factor = 1.0
+pue = 1.1
+
+[orbit]
+altitude = 510
+sunlight_beta = 67.8
+
+[solar_array]
+area = 200.0       # m^2 — sized for ~130 kW BOL
+panels = 1
+degradation_rate = 0.006
+
+[battery]
+cycles = 5000
+
+[transceiver]
+mass = 5000.0      # g — 5 kg laser comm terminal
+power = 500.0      # W
+data_rate = 10000000.0 # Kbps — 10 Gbps
+
+[cpu]
+mass = 2000.0      # g
+area = 400.0       # mm^2
+max_power = 500.0  # W
+
+[gpu]
+mass = 240000.0    # g — 100x H100-class GPUs (~2.4 kg each)
+area = 81400.0     # mm^2
+max_power = 70000.0 # W — 100 × 700 W
+embodied_kg = 131200.0  # kgCO2e — 100 × 1.312 tCO2e (source: Andreas Schmidt / ACT data)
+
+[dram]
+capacity = 8000.0        # GB — 100 × 80 GB
+power_per_memory = 0.020
+
+[ssd]
+capacity = 800.0    # TB
+average_power = 400.0 # W

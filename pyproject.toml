@@ -1,0 +1,8 @@
+[project]
+name = "orbit-payback-pipeline"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["numpy", "pandas", "openpyxl", "skyfield"]
+
+[tool.uv]
+package = false

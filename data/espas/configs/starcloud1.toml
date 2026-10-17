@@ -1,0 +1,41 @@
+# Starcloud-1: as-flown baseline (Nov 2025, 325 km LEO, 11 months, Nvidia H100)
+mission_time = 0.917    # 11 months in years
+launch = "Falcon9"
+redundancy_factor = 1.0
+pue = 1.1
+
+[orbit]
+altitude = 510     # km
+sunlight_beta = 0  # deg
+
+[solar_array]
+area = 0.5               # m^2 — estimated for 60kg satellite
+panels = 1
+degradation_rate = 0.006
+
+[battery]
+cycles = 5000
+
+[transceiver]
+mass = 200.0       # g — Ka-band transceiver
+power = 20.0       # W
+data_rate = 1000.0 # Kbps — ~1 Mbps downlink
+
+[cpu]
+mass = 100.0     # g — embedded processor
+area = 400.0     # mm^2
+max_power = 15.0 # W
+
+[gpu]
+mass = 2400.0        # g — H100 SXM ~2.4 kg
+area = 814.0         # mm^2
+max_power = 700.0    # W — H100 TDP
+embodied_kg = 1312.0 # kgCO2e — H100-class (source: Andreas Schmidt / ACT data)
+
+[dram]
+capacity = 80.0          # GB — H100 HBM
+power_per_memory = 0.020 # W/GB
+
+[ssd]
+capacity = 4.0      # TB
+average_power = 3.0 # W
