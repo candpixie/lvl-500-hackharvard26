@@ -46,6 +46,7 @@ function serveObjects(): Plugin {
 
 export default defineConfig({
   plugins: [react(), serveObjects()],
+  worker: { format: 'es' },
   server: {
     fs: {
       allow: [fileURLToPath(new URL('.', import.meta.url)), fileURLToPath(new URL('..', import.meta.url))],

@@ -48,8 +48,8 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
       if (result.focus) onFocus(result.focus)
       void imagineGrok(
         result.focus
-          ? `Low Earth orbit at ${Math.round(result.focus.altitude_km)} km, ${result.answer}`
-          : result.answer,
+          ? `Low Earth orbit shell at ${Math.round(result.focus.altitude_km)} km, inclination ${Math.round(result.focus.inclination_deg)} degrees`
+          : "Low Earth orbit with satellites and amber debris around Earth",
       )
         .then((art) => {
           const src = art.url ?? (art.b64_json ? `data:image/png;base64,${art.b64_json}` : '')

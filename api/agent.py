@@ -21,7 +21,7 @@ from api.data import (
 )
 
 XAI_BASE = "https://api.x.ai/v1"
-ASK_MODEL = os.getenv("XAI_ASK_MODEL", "grok-4.7")
+ASK_MODEL = os.getenv("XAI_ASK_MODEL", "grok-4.20-0309-non-reasoning")
 VOICE_ID = os.getenv("XAI_VOICE_ID", "eve")
 STT_MODEL = os.getenv("XAI_STT_MODEL", "grok-voice-transcribe-2.0")
 IMAGINE_MODEL = os.getenv("XAI_IMAGINE_MODEL", "grok-imagine-image-2.0")
@@ -185,7 +185,9 @@ def _text_from_response(response) -> str:
 
 
 def _focus_from_calls(tool_calls: list[dict]) -> dict | None:
-    focus = None
+    rank_focus = None
+    place_focus = None
+    other = None
     for call in tool_calls:
         name, result = call["name"], call["result"]
         if name == "ask_chalk" and chalk_ok(result):
@@ -197,22 +199,24 @@ def _focus_from_calls(tool_calls: list[dict]) -> dict | None:
                 }
             nested = result.get("tool_calls") or []
             if isinstance(nested, list):
-                return _focus_from_calls(nested) or focus
-        if name == "place_satellites" and isinstance(result, dict) and "alt_km" in result:
-            focus = focus_from_place(result)
-        elif name == "rank_shells" and isinstance(result, list) and focus is None:
-            focus = focus_from_rank(result)
-        elif name == "get_shell_crowding" and isinstance(result, dict) and "alt_lo" in result and focus is None:
-            focus = {
+                found = _focus_from_calls(nested)
+                if found:
+                    return found
+        if name == "rank_shells" and isinstance(result, list):
+            rank_focus = focus_from_rank(result) or rank_focus
+        elif name == "place_satellites" and isinstance(result, dict) and "alt_km" in result:
+            place_focus = focus_from_place(result)
+        elif name == "get_shell_crowding" and isinstance(result, dict) and "alt_lo" in result and other is None:
+            other = {
                 "altitude_km": (result["alt_lo"] + result["alt_hi"]) / 2,
                 "inclination_deg": DEFAULT_INC_DEG,
             }
-        elif name == "get_close_approaches" and isinstance(result, dict) and result.get("rows") and focus is None:
+        elif name == "get_close_approaches" and isinstance(result, dict) and result.get("rows") and other is None:
             row = result["rows"][0]
             alt = row.get("mean_alt_km") or row.get("alt_km_1") or row.get("alt_km_2")
             if alt is not None:
-                focus = {"altitude_km": alt, "inclination_deg": DEFAULT_INC_DEG}
-    return focus
+                other = {"altitude_km": alt, "inclination_deg": DEFAULT_INC_DEG}
+    return rank_focus or place_focus or other
 
 
 def _reasoner(tool_calls: list[dict]) -> str:
@@ -314,15 +318,12 @@ def transcribe(audio: bytes, filename: str = "clip.webm", content_type: str = "a
         response = client.post(
             f"{XAI_BASE}/stt",
             headers={"Authorization": f"Bearer {key}"},
-            data=[
-                ("model", STT_MODEL),
-                ("format", "true"),
-                ("language", "en"),
-                ("keyterm", "kilometer"),
-                ("keyterm", "satellite"),
-                ("keyterm", "debris"),
-                ("keyterm", "Starlink"),
-            ],
+            data={
+                "model": STT_MODEL,
+                "format": "true",
+                "language": "en",
+                "keyterm": ["kilometer", "satellite", "debris", "Starlink"],
+            },
             files={"file": (filename, audio, content_type or "application/octet-stream")},
         )
         response.raise_for_status()
