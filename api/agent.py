@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import time
 from typing import Any
 
 import httpx
@@ -34,6 +36,26 @@ VOICE_ID = os.getenv("XAI_VOICE_ID", "eve")
 STT_MODEL = os.getenv("XAI_STT_MODEL", "grok-voice-transcribe-2.0")
 IMAGINE_MODEL = os.getenv("XAI_IMAGINE_MODEL", "grok-imagine-image-2.0")
 MAX_TOOL_ROUNDS = 6
+
+
+def _log(message: str) -> None:
+    """One line on the server terminal, flushed so it shows up while the request is still running."""
+    print(f"{time.strftime('%H:%M:%S')}  {message}", file=sys.stderr, flush=True)
+
+
+def _tool_line(result: Any) -> str:
+    if not isinstance(result, dict):
+        return "ok"
+    if result.get("error"):
+        return f"error  {result['error']}"
+    focus = result.get("focus")
+    if not isinstance(focus, dict) or focus.get("altitude_km") is None:
+        return "ok"
+    line = f"ok  {focus['altitude_km']:.0f} km"
+    inc = focus.get("inclination_deg")
+    if isinstance(inc, (int, float)):
+        line += f"  {inc:.0f}°"
+    return line
 
 SYSTEM_BASE = """You are the Orbit Payback voice. You help someone pick a low Earth orbit that does the least harm.
 
@@ -408,6 +430,7 @@ def ask(question: str, history: list | None = None, context: dict | None = None)
     tools = _tools(use_chalk, use_remote)
     tool_calls: list[dict] = []
     first_choice: Any = {"type": "function", "name": "ask_chalk"} if use_chalk else "auto"
+    _log(f"ask   {question.strip()}")
     response = client.responses.create(
         model=ASK_MODEL,
         input=_input_messages(_system(use_chalk, use_remote), question, history, context),
@@ -424,11 +447,13 @@ def ask(question: str, history: list | None = None, context: dict | None = None)
             args = json.loads(item.arguments or "{}")
             if item.name == "ask_chalk" and not args.get("question"):
                 args["question"] = question
+            _log(f"tool  {item.name}")
             try:
                 result = _run_tool(item.name, args)
             except Exception as exc:
                 chalk_tool = item.name == "ask_chalk" or item.name in REMOTE_FUNCTIONS
                 result = {"error": redact(str(exc)), "fallback": chalk_tool}
+            _log(f"tool  {item.name}  {_tool_line(result)}")
             tool_calls.append({"name": item.name, "arguments": args, "result": result})
             outputs.append({
                 "type": "function_call_output",
@@ -454,14 +479,17 @@ def ask(question: str, history: list | None = None, context: dict | None = None)
                 break
     if not answer:
         answer = "I could not get a number-backed answer. Try asking about a shell or a count."
+    focus = _focus_from_calls(tool_calls)
+    reasoner = _reasoner(tool_calls)
+    _log(f"done  reasoner {reasoner}  focus {focus}")
     return {
         "answer": answer,
-        "focus": _focus_from_calls(tool_calls),
+        "focus": focus,
         "tool_calls": [
             {"name": c["name"], "arguments": c["arguments"], "result": c["result"]}
             for c in tool_calls
         ],
-        "reasoner": _reasoner(tool_calls),
+        "reasoner": reasoner,
     }
 
 
