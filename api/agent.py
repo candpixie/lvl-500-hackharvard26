@@ -27,8 +27,10 @@ from api.data import (
     get_close_approaches,
     get_shell_crowding,
     place_satellites,
+    rank_locations,
     rank_shells,
 )
+from locations import find_region, mentioned_altitude_km
 
 XAI_BASE = "https://api.x.ai/v1"
 ASK_MODEL = os.getenv("XAI_ASK_MODEL", "grok-4.20-0309-non-reasoning")
@@ -78,14 +80,16 @@ SYSTEM_CHALK = SYSTEM_BASE + """
 You MUST call ask_chalk first with the user's question. Chalk owns data and conclusions.
 If ask_chalk returns an answer and numbers, do not call any other tool. Speak those numbers. Use its focus.
 If ask_chalk returns an error or fallback=true, then you may use the local tools:
-  rank_shells for "where should I put N",
+  rank_locations when the user names a place (over Africa, over China). It picks an inclination whose ground track reaches that place, ranked by tracked debris in that band.
+  rank_shells for "where should I put N" with no place named,
   place_satellites for a specific altitude,
   get_shell_crowding + get_close_approaches for 800 km / debris,
   get_close_approaches with no altitude for the closest near miss this week.
 """
 
 SYSTEM_LOCAL = SYSTEM_BASE + """
-Call rank_shells for "where should I put N".
+Call rank_locations when the user names a place (over Africa, over China, over Europe). The inclination has to reach that place. Do not use rank_shells for those: a shell rank ignores the ground track.
+Call rank_shells for "where should I put N" when no place is named.
 Call place_satellites for a specific altitude.
 Call get_shell_crowding and get_close_approaches around 800 km for debris questions.
 Call get_close_approaches without an altitude for the closest near miss this week.
@@ -179,6 +183,25 @@ REMOTE_TOOLS = [
 ]
 
 LOCAL_TOOLS = [
+    {
+        "type": "function",
+        "name": "rank_locations",
+        "description": (
+            "Best low Earth orbit whose ground track actually crosses a place "
+            "(Africa, China, Europe, India, the United States, Brazil, Australia, Japan). "
+            "Ranked by tracked debris in that 10 degree inclination band. "
+            "Pass altitude_km when the user names one."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "region": {"type": "string"},
+                "altitude_km": {"type": "number"},
+                "top": {"type": "integer"},
+            },
+            "required": ["region"],
+        },
+    },
     {
         "type": "function",
         "name": "get_shell_crowding",
@@ -301,6 +324,8 @@ def _run_tool(name: str, args: dict) -> Any:
     if name == "rank_shells":
         dims = args.get("dims_m") or DEFAULT_DIMS_M
         return rank_shells([float(x) for x in dims], _int(args["count"]), _int(args.get("top"), 10))
+    if name == "rank_locations":
+        return rank_locations(str(args.get("region") or ""), _num(args.get("altitude_km")), _int(args.get("top"), 5))
     if name == "get_close_approaches":
         return get_close_approaches(_num(args.get("alt_km")), _int(args.get("limit"), 10))
     return {"error": f"unknown tool {name}"}
@@ -338,12 +363,27 @@ def _mission_from_args(args: Any) -> dict:
     return out
 
 
+_MISSION_TOOLS = {"rank_shells", "place_satellites", "rank_locations"}
+_GEO_KEYS = ("latitude_deg", "longitude_deg", "raan_deg", "place")
+
+
+def _copy_focus(raw: dict) -> dict:
+    out = {
+        "altitude_km": raw["altitude_km"],
+        "inclination_deg": raw.get("inclination_deg", DEFAULT_INC_DEG),
+    }
+    for key in ("count", "dims_m", *_GEO_KEYS):
+        if raw.get(key) is not None:
+            out[key] = raw[key]
+    return out
+
+
 def _mission_from_calls(tool_calls: list) -> dict:
     """Count/size from rank/place only when that is the first tool, not a why-style extra rank."""
     if not tool_calls or not isinstance(tool_calls[0], dict):
         return {}
     first = tool_calls[0]
-    if first.get("name") in {"rank_shells", "place_satellites"}:
+    if first.get("name") in _MISSION_TOOLS:
         return _mission_from_args(first.get("arguments"))
     return {}
 
@@ -364,13 +404,14 @@ def _fill_mission(focus: dict | None, tool_calls: list[dict]) -> dict | None:
     if not focus or focus.get("count") is not None:
         return focus
     for call in tool_calls:
-        if call.get("name") in {"rank_shells", "place_satellites"}:
+        if call.get("name") in _MISSION_TOOLS:
             return _attach_mission(focus, _mission_from_args(call.get("arguments")))
     return focus
 
 
 def _focus_from_calls(tool_calls: list[dict]) -> dict | None:
     chalk_focus = None
+    location_focus = None
     rank_focus = None
     place_focus = None
     other = None
@@ -383,19 +424,16 @@ def _focus_from_calls(tool_calls: list[dict]) -> dict | None:
             nested_mission = _mission_from_calls(nested) if isinstance(nested, list) else {}
             raw_mission = _mission_from_args(raw)
             if isinstance(raw, dict) and raw.get("altitude_km") is not None:
-                chalk_focus = _attach_mission(
-                    {
-                        "altitude_km": raw["altitude_km"],
-                        "inclination_deg": raw.get("inclination_deg", DEFAULT_INC_DEG),
-                    },
-                    raw_mission,
-                    nested_mission,
-                )
+                chalk_focus = _attach_mission(_copy_focus(raw), raw_mission, nested_mission)
             elif isinstance(nested, list):
                 found = _focus_from_calls(nested)
                 if found:
                     chalk_focus = _attach_mission(found, nested_mission)
-        if name == "rank_shells" and isinstance(result, list):
+        if name == "rank_locations" and isinstance(result, dict):
+            raw = result.get("focus")
+            if isinstance(raw, dict) and raw.get("altitude_km") is not None:
+                location_focus = _attach_mission(_copy_focus(raw), _mission_from_args(args))
+        elif name == "rank_shells" and isinstance(result, list):
             rank_focus = _attach_mission(focus_from_rank(result), _mission_from_args(args)) or rank_focus
         elif name == "place_satellites" and isinstance(result, dict) and "alt_km" in result:
             place_focus = _attach_mission(focus_from_place(result), _mission_from_args(args))
@@ -411,7 +449,7 @@ def _focus_from_calls(tool_calls: list[dict]) -> dict | None:
                 other = {"altitude_km": alt, "inclination_deg": DEFAULT_INC_DEG}
         elif name in REMOTE_FUNCTIONS and other is None:
             other = _focus_from_remote(name, result)
-    return _fill_mission(chalk_focus or rank_focus or place_focus or other, tool_calls)
+    return _fill_mission(chalk_focus or location_focus or rank_focus or place_focus or other, tool_calls)
 
 
 def _focus_from_remote(name: str, result: Any) -> dict | None:
@@ -519,6 +557,9 @@ def _ui_events_from_focus(focus: dict | None, tool_calls: list[dict] | None = No
             event["count"] = int(focus["count"])
         if focus.get("dims_m") is not None:
             event["dims_m"] = focus["dims_m"]
+        for key in _GEO_KEYS:
+            if focus.get(key) is not None:
+                event[key] = focus[key]
         events.append(event)
     for call in tool_calls or []:
         if call.get("name") != "get_close_approaches":
@@ -595,6 +636,19 @@ def _local_route(question: str, context: dict | None) -> tuple[str, list[dict]]:
         )
         return answer, tool_calls
 
+    region = find_region(question)
+    if region is not None:
+        altitude = mentioned_altitude_km(question)
+        try:
+            result = record(
+                "rank_locations",
+                {"region": region.id, "altitude_km": altitude, "top": 5},
+                rank_locations(region.id, altitude, 5),
+            )
+        except ValueError as exc:
+            return str(exc), tool_calls
+        return str(result.get("answer") or "I could not rank orbits over that place."), tool_calls
+
     if "800" in q or "debris" in q or "junk" in q:
         crowd = record("get_shell_crowding", {"alt_km": 825}, get_shell_crowding(825))
         approaches = record(
@@ -654,8 +708,22 @@ def _local_route(question: str, context: dict | None) -> tuple[str, list[dict]]:
     return answer, tool_calls
 
 
+def _answer_place(question: str) -> dict | None:
+    """A named place has to be answered from the ground track, not a shell rank that ignores it."""
+    q = (question or "").lower()
+    if "near miss" in q or ("closest" in q and ("miss" in q or "approach" in q)):
+        return None
+    if find_region(question) is None:
+        return None
+    answer, tool_calls = _local_route(question, None)
+    return _pack_ask(answer, _focus_from_calls(tool_calls), tool_calls, "local")
+
+
 def ask_without_grok(question: str, context: dict | None = None) -> dict:
     """Chalk-first ask when Grok is unavailable. Local tools if Chalk is unset or errors."""
+    placed = _answer_place(question)
+    if placed:
+        return placed
     q = (question or "").strip()
     if not q:
         return _pack_ask("Ask a question about where to place satellites.", None, [], "local")
@@ -686,6 +754,9 @@ def ask_without_grok(question: str, context: dict | None = None) -> dict:
 
 
 def ask(question: str, history: list | None = None, context: dict | None = None) -> dict:
+    placed = _answer_place(question)
+    if placed:
+        return placed
     if not has_xai_key():
         return ask_without_grok(question, context)
 

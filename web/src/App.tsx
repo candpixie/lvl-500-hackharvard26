@@ -25,7 +25,14 @@ import NeighborhoodCard from './NeighborhoodCard.tsx'
 import ObjectCard from './ObjectCard.tsx'
 import { RING_DRAW_CAP, type ObjectFact, type OrbitCounts, type WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
-import { GLOBE_RADIUS, goldStarSprite, orbitLine, ORBIT_COLOR } from './place.ts'
+import {
+  GLOBE_RADIUS,
+  goldStarSprite,
+  groundTrackPositions,
+  orbitLine,
+  ORBIT_COLOR,
+  raanFor,
+} from './place.ts'
 import {
   exaggeratePoint,
   neighborhoodAround,
@@ -157,6 +164,12 @@ const craftFragment = `
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+function formatAbsDegrees(value: number) {
+  const abs = Math.abs(value)
+  if (Math.abs(abs - Math.round(abs)) < 0.05) return String(Math.round(abs))
+  return abs.toFixed(1)
+}
+
 function formatEpoch(day: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day)
   if (!match) return day
@@ -248,6 +261,9 @@ export default function App() {
   const [shells, setShells] = useState<ShellRow[] | null>(null)
   const [shellError, setShellError] = useState<string | null>(null)
   const [debrisOnly, setDebrisOnly] = useState(false)
+  const [askedPlace, setAskedPlace] = useState<string | null>(null)
+  const [pickRegion, setPickRegion] = useState(false)
+  const [pickedLat, setPickedLat] = useState<number | null>(null)
   const [clockRate, setClockRate] = useState<1 | 60 | 600>(1)
   const [simLabel, setSimLabel] = useState('')
   const workerRef = useRef<Worker | null>(null)
@@ -263,6 +279,8 @@ export default function App() {
   const altitudeRef = useRef(altitude)
   const inclinationRef = useRef(inclination)
   const debrisOnlyRef = useRef(debrisOnly)
+  const pickRegionRef = useRef(pickRegion)
+  const pickSurfaceRef = useRef<(lat: number, lng: number) => void>(() => {})
   const ignoreSliderUntil = useRef(0)
   const applyAskFocusRef = useRef<(focus: FocusOrbit | null) => void>(() => {})
   const clearPickRef = useRef<() => void>(() => {})
@@ -463,14 +481,52 @@ export default function App() {
     }
 
     let orbit: Line | null = null
+    let track: Line | null = null
     const orbitMaterial = new LineBasicMaterial({ color: ORBIT_COLOR, transparent: true, opacity: 0.9 })
+    const trackMaterial = new LineBasicMaterial({ color: '#9EE7D2', transparent: true, opacity: 0.8 })
+    const paintTrack = (altitudeKm: number, inclinationDeg: number, raanDeg: number) => {
+      if (track) {
+        globe.scene().remove(track)
+        track.geometry.dispose()
+        track = null
+      }
+      const geometry = new BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new Float32BufferAttribute(groundTrackPositions(altitudeKm, inclinationDeg, raanDeg), 3),
+      )
+      track = new Line(geometry, trackMaterial)
+      track.visible = !simLiveRef.current
+      globe.scene().add(track)
+    }
     const star = goldStarSprite()
     globe.scene().add(star)
+    globe
+      .labelsData([])
+      .labelLat('lat')
+      .labelLng('lng')
+      .labelText('text')
+      .labelSize(0.7)
+      .labelDotRadius(0.4)
+      .labelColor(() => '#E7F27A')
+      .labelAltitude(0.012)
+      .labelIncludeDot(true)
     let pinOn = false
+    let aim: { lat: number; lng: number; raan: number; inc: number; place?: string } | null = null
     flyRef.current = (focus, opts = {}) => {
       if (simLiveRef.current) return
       holdSpin(FLY_MS)
-      const { positions, marker } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
+      const useAim = focus.raan_deg == null && aim != null && Math.abs(aim.inc - focus.inclination_deg) < 0.6
+      const raan = focus.raan_deg ?? (useAim ? aim!.raan : 28)
+      paintTrack(focus.altitude_km, focus.inclination_deg, raan)
+      const markerLat = focus.latitude_deg ?? (useAim ? aim!.lat : undefined)
+      const { positions, marker } = orbitLine(
+        focus.altitude_km,
+        focus.inclination_deg,
+        raan,
+        ALTITUDE_EXAGGERATION,
+        markerLat,
+      )
       if (orbit) {
         globe.scene().remove(orbit)
         orbit.geometry.dispose()
@@ -482,11 +538,32 @@ export default function App() {
       star.position.set(marker[0], marker[1], marker[2])
       pinOn = Boolean(opts.pin)
       star.visible = pinOn
+      if (focus.latitude_deg != null && focus.longitude_deg != null && focus.raan_deg != null) {
+        aim = {
+          lat: focus.latitude_deg,
+          lng: focus.longitude_deg,
+          raan: focus.raan_deg,
+          inc: focus.inclination_deg,
+          place: focus.place,
+        }
+      }
+      const lookLat = focus.latitude_deg ?? (useAim ? aim?.lat : undefined)
+      const lookLng = focus.longitude_deg ?? (useAim ? aim?.lng : undefined)
+      const lookPlace = focus.place ?? (useAim ? aim?.place : undefined)
+      if (lookLat != null && lookLng != null) {
+        globe.labelsData([{ lat: lookLat, lng: lookLng, text: lookPlace ?? '' }])
+      } else if (!useAim) {
+        globe.labelsData([])
+      }
       if (!opts.look) return
       const pov = globe.pointOfView() as { lat?: number; lng?: number; altitude?: number }
-      const lat = Math.max(-55, Math.min(55, 90 - focus.inclination_deg))
+      const lat = Math.max(-55, Math.min(55, lookLat ?? 90 - focus.inclination_deg))
       globe.pointOfView(
-        { lat, lng: pov.lng ?? 20, altitude: typeof pov.altitude === 'number' ? pov.altitude : 1.65 },
+        {
+          lat,
+          lng: lookLng ?? pov.lng ?? 20,
+          altitude: typeof pov.altitude === 'number' ? pov.altitude : 1.65,
+        },
         700,
       )
     }
@@ -552,6 +629,7 @@ export default function App() {
       ringCloud.visible = false
       fleet?.setVisible(false)
       if (orbit) orbit.visible = false
+      if (track) track.visible = false
       star.visible = false
       for (const material of materials) material.uniforms.uHideOutside.value = 1
       clearPick()
@@ -752,6 +830,7 @@ export default function App() {
       showModels(zoomed)
       setClose(zoomed)
       if (orbit) orbit.visible = true
+      if (track) track.visible = true
       star.visible = pinOn
       syncShell(altitudeRef.current)
       fit()
@@ -798,6 +877,7 @@ export default function App() {
         setStatus({ state: 'ready' })
         return
       }
+      if (message.kind !== 'positions') return
       if (!cloud || !fleet || message.positions.length !== factsRef.current.length * 3) return
       if (message.ring) {
         const shown = Math.min(RING_DRAW_CAP, message.ring.length / 3)
@@ -833,6 +913,16 @@ export default function App() {
     let downY = 0
     const origin = new Vector3()
     const dir = new Vector3()
+    const locate = globe as unknown as {
+      toGlobeCoords(x: number, y: number): { lat: number; lng: number } | null
+    }
+    const readSurface = (lat: number, lng: number) => {
+      if (simLiveRef.current || !pickRegionRef.current) return
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+      pickSurfaceRef.current(lat, lng)
+    }
+    globe.onGlobeClick((coords) => readSurface(coords.lat, coords.lng))
+    globe.onPolygonClick((_polygon, _event, coords) => readSurface(coords.lat, coords.lng))
     const onDown = (event: PointerEvent) => {
       if (pointerOverGlobe(event)) holdForPointer()
       downX = event.clientX
@@ -842,6 +932,16 @@ export default function App() {
       if (!pointerOverGlobe(event) && userPaused && idleTimer === 0) armResume()
       if (simLiveRef.current) return
       if (Math.hypot(event.clientX - downX, event.clientY - downY) > 5) return
+      if (pickRegionRef.current) {
+        const rect = canvas.getBoundingClientRect()
+        try {
+          const coords = locate.toGlobeCoords(event.clientX - rect.left, event.clientY - rect.top)
+          if (coords) readSurface(coords.lat, coords.lng)
+        } catch {
+          // A miss outside the Earth is not a placement.
+        }
+        return
+      }
       const catalog = catalogRef.current
       if (!catalog) return
       const cam = globe.camera()
@@ -857,6 +957,7 @@ export default function App() {
     }
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointerup', onUp)
+    flyRef.current({ altitude_km: altitudeRef.current, inclination_deg: inclinationRef.current })
 
     return () => {
       applyShellRef.current = () => {}
@@ -874,6 +975,8 @@ export default function App() {
       cancelAnimationFrame(refit)
       resizeObserver.disconnect()
       flyRef.current = () => {}
+      workerRef.current = null
+      controlsRef.current = null
       enterSimRef.current = () => {}
       exitSimRef.current = () => {}
       controls.update = nativeUpdate
@@ -891,7 +994,9 @@ export default function App() {
       dots.dispose()
       models.dispose()
       orbitMaterial.dispose()
+      trackMaterial.dispose()
       orbit?.geometry.dispose()
+      track?.geometry.dispose()
       const starMaterial = star.material as SpriteMaterial
       starMaterial.map?.dispose()
       starMaterial.dispose()
@@ -922,6 +1027,10 @@ export default function App() {
         inclination_deg: event.inclination_deg,
         count: event.count,
         dims_m: event.dims_m,
+        latitude_deg: event.latitude_deg,
+        longitude_deg: event.longitude_deg,
+        raan_deg: event.raan_deg,
+        place: event.place,
       })
       return
     }
@@ -942,6 +1051,31 @@ export default function App() {
   useEffect(() => {
     inclinationRef.current = inclination
   }, [inclination])
+
+  useEffect(() => {
+    pickRegionRef.current = pickRegion
+    const canvas = hostRef.current?.querySelector('canvas')
+    if (canvas) canvas.style.cursor = pickRegion ? 'crosshair' : ''
+  }, [pickRegion])
+
+  pickSurfaceRef.current = (lat, lng) => {
+    const need = Math.abs(lat)
+    const nextInc = Math.max(inclinationRef.current, Math.ceil(need - 1e-9))
+    setPickedLat(lat)
+    setInclination(nextInc)
+    const hemi = lat >= 0 ? 'N' : 'S'
+    flyRef.current(
+      {
+        altitude_km: altitudeRef.current,
+        inclination_deg: nextInc,
+        latitude_deg: lat,
+        longitude_deg: lng,
+        raan_deg: raanFor(nextInc, lat, lng),
+        place: `${formatAbsDegrees(need)}°${hemi}`,
+      },
+      { pin: true, look: true },
+    )
+  }
 
   useEffect(() => {
     debrisOnlyRef.current = debrisOnly
@@ -988,6 +1122,7 @@ export default function App() {
       if (typeof length === 'number' && Number.isFinite(length)) {
         setSize(Math.min(20, Math.max(1, length)))
       }
+      if (focus.place) setAskedPlace(focus.place)
       flyRef.current({ ...focus, altitude_km: next }, { pin: true, look: true })
     }
   })
@@ -1007,7 +1142,13 @@ export default function App() {
       <aside className="hud">
         <p className="kicker">Orbit Payback</p>
         <h1>How crowded is this altitude?</h1>
-        <p className="dek">{close ? 'Point at a satellite. Not to scale.' : 'Set a shell, or click a dot.'}</p>
+        <p className="dek">
+          {pickRegion
+            ? 'Click a point on Earth.'
+            : close
+              ? 'Point at a satellite. Not to scale.'
+              : 'Set a shell, or click a dot.'}
+        </p>
         <p className="asof">
           {epoch ? (
             <>
@@ -1039,19 +1180,29 @@ export default function App() {
           onCount={setCount}
           onSize={setSize}
           onDebrisOnly={setDebrisOnly}
+          pickRegion={pickRegion}
+          pickedLat={pickedLat}
+          onPickRegion={setPickRegion}
           onScene={(scene) => {
             setAltitude(scene.altitude)
             setAltitudeChosen(true)
             if (scene.inclination != null) setInclination(scene.inclination)
             if (scene.count != null) setCount(scene.count)
             if (scene.debrisOnly != null) setDebrisOnly(scene.debrisOnly)
-            const target = {
-              altitude_km: scene.altitude,
-              inclination_deg: scene.inclination ?? inclination,
-            }
-            if (scene.focus) flyRef.current(target, { pin: true, look: true })
-            else flyRef.current(target)
+            const look = scene.look || scene.latitude != null || scene.focus
+            flyRef.current(
+              {
+                altitude_km: scene.altitude,
+                inclination_deg: scene.inclination ?? inclination,
+                latitude_deg: scene.latitude,
+                longitude_deg: scene.longitude,
+                raan_deg: scene.raan,
+                place: scene.place,
+              },
+              look ? { pin: scene.latitude != null || Boolean(scene.focus), look: true } : undefined,
+            )
           }}
+          askedPlace={askedPlace}
           onVisualizeShell={() => {
             const catalog = catalogRef.current
             if (!catalog) return

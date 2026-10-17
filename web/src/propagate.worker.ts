@@ -269,6 +269,7 @@ async function main() {
     const wait = rate > 1 ? 33 : 1000
     setTimeout(tick, Math.max(0, wait - (performance.now() - started)))
   }
+  lastReal = performance.now()
   setTimeout(tick, 1000)
 }
 
