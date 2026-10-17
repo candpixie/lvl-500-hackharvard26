@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Globe from 'globe.gl'
 import {
+  AdditiveBlending,
   BufferGeometry,
   Float32BufferAttribute,
   Line,
@@ -80,8 +81,7 @@ const pointVertex = `
   uniform float uHideOutside;
   uniform float uDebrisOnly;
   uniform float uExaggerate;
-  uniform float uSize;
-  uniform float uScale;
+  uniform float uPixelRatio;
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
@@ -90,14 +90,15 @@ const pointVertex = `
     vec3 placed = normalize(position) * 100.0 * (1.0 + capped * uExaggerate);
     float inside = step(uShellMin, aAlt) * step(aAlt, uShellMax);
     float debris = step(0.5, aKind);
-    vColor = mix(color, vec3(0.949, 0.647, 0.255), debris);
-    if (debris > 0.5) vAlpha = mix(0.55, 1.0, inside);
+    vColor = mix(color, vec3(1.0, 0.62, 0.1), debris);
+    if (inside > 0.5 && debris < 0.5) vColor = vec3(0.97, 0.98, 1.0);
+    if (debris > 0.5) vAlpha = mix(0.85, 1.0, inside);
     else vAlpha = mix(uDim, 1.0, inside);
     if (uHideOutside > 0.5) vAlpha *= inside;
     if (uDebrisOnly > 0.5) vAlpha *= debris;
     vec4 mv = modelViewMatrix * vec4(placed, 1.0);
-    float boost = mix(1.0, 2.2, debris) * mix(0.45, 1.65, inside);
-    gl_PointSize = uSize * boost * (uScale / -mv.z);
+    float base = mix(1.5, 2.5, debris);
+    gl_PointSize = base * mix(1.0, 2.1, inside) * uPixelRatio;
     gl_Position = projectionMatrix * mv;
   }
 `
@@ -107,9 +108,10 @@ const pointFragment = `
   varying float vAlpha;
   void main() {
     if (vAlpha < 0.03) discard;
-    vec2 centered = gl_PointCoord - vec2(0.5);
-    if (dot(centered, centered) > 0.25) discard;
-    gl_FragColor = vec4(vColor, vAlpha);
+    float dist = length(gl_PointCoord - vec2(0.5));
+    float soft = smoothstep(0.5, 0.15, dist);
+    if (soft < 0.02) discard;
+    gl_FragColor = vec4(vColor, vAlpha * soft);
   }
 `
 
@@ -157,13 +159,13 @@ function pointMaterial(altitudeKm: number) {
     uniforms: {
       ...shellUniforms(altitudeKm),
       uExaggerate: { value: ALTITUDE_EXAGGERATION },
-      uSize: { value: 2.1 },
-      uScale: { value: 400 },
+      uPixelRatio: { value: 1 },
     },
     vertexShader: pointVertex,
     fragmentShader: pointFragment,
     transparent: true,
     depthWrite: false,
+    blending: AdditiveBlending,
     vertexColors: true,
   })
 }
@@ -265,7 +267,7 @@ export default function App() {
       globe.width(width)
       globe.height(height)
       globe.globeOffset([Math.round(column * 0.42), 0])
-      dots.uniforms.uScale.value = height * 0.5
+      dots.uniforms.uPixelRatio.value = globe.renderer().getPixelRatio()
     }
     fit()
     const refit = requestAnimationFrame(fit)

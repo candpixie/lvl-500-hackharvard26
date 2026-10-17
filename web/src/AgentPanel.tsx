@@ -122,7 +122,7 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
     <aside className="hud hud-agent">
       <p className="kicker">Grok</p>
       <h1>Where should it go?</h1>
-      <p className="dek">Speak or type. Chalk reasons on our catalog. The globe flies to that shell.</p>
+      <p className="dek">Speak or type. The globe flies to that shell.</p>
       <div className="chips">
         {PROMPTS.map((item) => (
           <button key={item.label} type="button" className="chip" disabled={busy} onClick={() => setQuestion(item.question)}>

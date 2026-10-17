@@ -445,6 +445,9 @@ h1 {
   width: min(320px, calc(100vw - 48px));
   max-height: calc(100vh - 40px);
   overflow: auto;
+  padding: 16px 16px 14px;
+  background: rgba(5, 7, 11, 0.84);
+  border: 1px solid rgba(201, 214, 227, 0.14);
 }
 
 .hud-agent::before {
@@ -503,18 +506,21 @@ h1 {
 
 .ask-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
 }
 
 .ask-go {
+  flex: 0 0 auto;
   padding: 7px 10px;
   color: #05070b;
   background: #e7f27a;
   border: 1px solid #e7f27a;
   font-size: 11px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .ask-voice {
