@@ -1,4 +1,4 @@
-"""Tool-calling eval rows: what a correct agent should call for each question. Written by Person A.
+"""Tool-calling eval rows: what a correct agent should call for each question.
 
 Each case: id, group, question, context (what the globe shows), history (earlier turns), and expected:
   calls: [{tool, args, tol}]   expected arguments with an optional per-argument tolerance (default by name, see agent_scorers)

@@ -3,7 +3,7 @@
     uv run --with chalkcompute --with chalkpy python -m chalk_tools.deploy_ask
 
 Creates one scaling group (name orbit-ask) that serves POST /ask for the team's CHALK_ASK_URL
-(docs/chalk-contract.md). It requires a Chalk access token (authenticated=True); anyone calling it from outside
+(docs/chalk-ask-service.md). It requires a Chalk access token (authenticated=True); anyone calling it from outside
 Chalk sends `Authorization: Bearer $(chalk token get --expires-in 24h)`. Set authenticated=False below only if the
 team accepts a public URL anyone can call.
 """

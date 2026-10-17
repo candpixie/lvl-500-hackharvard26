@@ -2,7 +2,7 @@
 
 > Just connecting your API? Follow **`docs/chalk-quickstart.md`** (five minutes). This page is the reference.
 
-Built by Person A to satisfy `docs/chalk-contract.md`. Grok's `ask_chalk` tool posts the user's question here; this service runs the team's own `pipeline/scoring.py` (`rank`, `place`) and shell data, plus the SOCRATES near misses, and returns `{answer, focus, tool_calls, note}`. No LLM runs inside it, so answers are repeatable.
+Grok's `ask_chalk` tool posts the user's question here; this service runs the team's own `pipeline/scoring.py` (`rank`, `place`) and shell data, plus the SOCRATES near misses, and returns `{answer, focus, tool_calls, note}`. No LLM runs inside it, so answers are repeatable.
 
 ## Live
 - URL: `https://spcwce09a241-orbit-ask.mdwje5.svls.customers.gcp.chalk.ai/ask` (Chalk environment `spcwce09a241`, scaling group `orbit-ask`)
@@ -29,4 +29,4 @@ Rules, no model: `where should I put N ...` (rank), `what happens if N satellite
 `chalk_tools/ask_core.py` (question parsing and answers), `chalk_tools/ask_app.py` (Flask wrapper), `chalk_tools/deploy_ask.py` (deploy and smoke test). Redeploy after changing data or code: `uv run --with chalkcompute --with chalkpy python -m chalk_tools.deploy_ask`. Local run: `uv run --with flask python chalk_tools/ask_app.py`. Tests: `uv run --with pytest --with flask python -m pytest tests -q` (141 pass).
 
 ## Not done yet
-The junk-band eval from `docs/chalk-teammates.md` (recommendations stay out of 750 to 850 km and dead-satellite lifetime under about 25 years) is not built on Chalk yet. The service is traced (`tracing` at 100%) but no monitors or dashboard exist.
+The junk-band eval (recommendations stay out of 750 to 850 km and dead-satellite lifetime under about 25 years) is not built on Chalk yet. The service is traced (`tracing` at 100%) but no monitors or dashboard exist.

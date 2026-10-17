@@ -1,6 +1,6 @@
 # Eval results: does recommend_orbit steer away from predicted near misses?
 
-Data snapshot `d29cf5404f55` (CelesTrak SATCAT + SOCRATES Oct 16 to 23, 2026). Written by Person A. Numbers are from real runs.
+Data snapshot `d29cf5404f55` (CelesTrak SATCAT + SOCRATES Oct 16 to 23, 2026). Numbers are from real runs.
 
 ## What was measured
 For each mission (an inclination and an altitude band), a picker chooses one 50 km shell. The score is where that shell ranks among the band's shells by SOCRATES predicted near-miss count: 1.0 = fewest near misses, 0.0 = most, random = 0.5. The picker never sees SOCRATES. Pickers: `recommend` (recommend_orbit, top 1), `count_in_plane` (fewest objects by average altitude near the same inclination), `web_rule` (the web app's rule: fewest objects by average altitude, any inclination), `random`.

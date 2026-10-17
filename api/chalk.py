@@ -1,6 +1,6 @@
 """Call the Chalk reasoner. Grok must use this before any local fallback tools.
 
-Teammates implement POST CHALK_ASK_URL with the body in docs/chalk-contract.md.
+Teammates implement POST CHALK_ASK_URL with the body in docs/chalk-ask-service.md.
 That HTTP contract stays {question} -> {answer, focus, tool_calls}. Their deployed
 functions (shell_crowding, objects_near, close_approaches) use a different
 envelope, {ok, data, coverage, caveats, snapshot_id}, and are optional.
