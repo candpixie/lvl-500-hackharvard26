@@ -895,10 +895,12 @@ export default function App() {
             if (scene.inclination != null) setInclination(scene.inclination)
             if (scene.count != null) setCount(scene.count)
             if (scene.debrisOnly != null) setDebrisOnly(scene.debrisOnly)
-            flyRef.current({
+            const target = {
               altitude_km: scene.altitude,
               inclination_deg: scene.inclination ?? inclination,
-            })
+            }
+            if (scene.focus) flyRef.current(target, { pin: true, look: true })
+            else flyRef.current(target)
           }}
           onVisualizeShell={() => {
             const catalog = catalogRef.current

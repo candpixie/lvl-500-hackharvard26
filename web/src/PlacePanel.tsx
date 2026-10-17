@@ -41,6 +41,7 @@ function formatScore(score: number) {
 
 interface SavedPlacement {
   id: number
+  name: string
   altitude: number
   inclination: number
   count: number
@@ -61,7 +62,13 @@ interface PlacePanelProps {
   onCount: (value: number) => void
   onSize: (value: number) => void
   onDebrisOnly: (value: boolean) => void
-  onScene: (scene: { altitude: number; inclination?: number; count?: number; debrisOnly?: boolean }) => void
+  onScene: (scene: {
+    altitude: number
+    inclination?: number
+    count?: number
+    debrisOnly?: boolean
+    focus?: boolean
+  }) => void
   onVisualizeShell: () => void
 }
 
@@ -89,6 +96,8 @@ export default function PlacePanel({
   const [miss, setMiss] = useState<NearMiss | null>(null)
   const [saved, setSaved] = useState<SavedPlacement[]>([])
   const nextSaveId = useRef(1)
+  const [saveName, setSaveName] = useState('')
+  const [openSaveId, setOpenSaveId] = useState<number | null>(null)
   const [touched, setTouched] = useState(false)
   const dims = dimsFor(size)
   const ready = altitudeChosen || touched
@@ -133,16 +142,20 @@ export default function PlacePanel({
 
   function savePlacement() {
     if (!place) return
+    const id = nextSaveId.current++
     setSaved((rows) => [
       ...rows,
       {
-        id: nextSaveId.current++,
+        id,
+        name: saveName.trim() || `Placement ${id}`,
         altitude: Math.round(altitude),
         inclination: Math.round(inclination),
         count,
         score: Math.round(place.score),
       },
     ])
+    setSaveName('')
+    setOpenSaveId(id)
   }
 
   return (
@@ -367,27 +380,70 @@ export default function PlacePanel({
             <span className="step-num num">4</span>
             Save & compare
           </h2>
+          <input
+            type="text"
+            className="save-name"
+            value={saveName}
+            maxLength={40}
+            placeholder="Name this placement"
+            aria-label="Placement name"
+            onChange={(e) => setSaveName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') savePlacement()
+            }}
+          />
           <button type="button" className="suggest" disabled={!place} onClick={savePlacement}>
             Save
           </button>
           {saved.length > 0 && (
             <ol className="saved-list">
-              {saved.map((row) => (
-                <li key={row.id}>
-                  <button
-                    type="button"
-                    className="saved-row"
-                    onClick={() =>
-                      onScene({ altitude: row.altitude, inclination: row.inclination, count: row.count })
-                    }
-                  >
-                    <span className="num">{row.altitude.toLocaleString('en-US')} km</span>
-                    <span className="num">{row.inclination}°</span>
-                    <span className="num">{formatCount(row.count)}</span>
-                    <span className="num">{row.score}/100</span>
-                  </button>
-                </li>
-              ))}
+              {saved.map((row) => {
+                const open = openSaveId === row.id
+                return (
+                  <li key={row.id} className="saved-item">
+                    <button
+                      type="button"
+                      className="saved-head"
+                      aria-expanded={open}
+                      onClick={() => setOpenSaveId(open ? null : row.id)}
+                    >
+                      <span className="saved-name">{row.name}</span>
+                      <span className="num">{row.score}/100</span>
+                      <span className="saved-caret" aria-hidden="true">
+                        {open ? '▾' : '▸'}
+                      </span>
+                    </button>
+                    {open && (
+                      <div className="saved-details">
+                        <dl>
+                          <dt>Altitude</dt>
+                          <dd className="num">{row.altitude.toLocaleString('en-US')} km</dd>
+                          <dt>Inclination</dt>
+                          <dd className="num">{row.inclination}°</dd>
+                          <dt>Satellites</dt>
+                          <dd className="num">{formatCount(row.count)}</dd>
+                          <dt>Score</dt>
+                          <dd className="num">{row.score}/100</dd>
+                        </dl>
+                        <button
+                          type="button"
+                          className="saved-view"
+                          onClick={() =>
+                            onScene({
+                              altitude: row.altitude,
+                              inclination: row.inclination,
+                              count: row.count,
+                              focus: true,
+                            })
+                          }
+                        >
+                          Show on globe
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ol>
           )}
         </section>
