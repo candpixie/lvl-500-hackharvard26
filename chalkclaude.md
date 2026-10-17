@@ -46,7 +46,7 @@ Needs uv. From the repo root:
 - Planned tools: `shell_crowding(altitude_km, inclination_deg=None)`, `objects_near(altitude_km, inclination_deg, limit)`, `close_approaches(min_altitude_km, max_altitude_km, limit)`, `recommend_orbit(mission)`. Not built yet; no Grok or Chalk agent code exists in the repo.
 - Raw shell counts mislead across shells (higher shells have more volume); consider objects per km^3.
 - Eval: agent sees only the first two tools; score its recommended shells by SOCRATES near-miss rate per shell against a random-pick baseline and the web app's lowest-count rule. Build the answer key from all 195,841 SOCRATES rows, not the 500 committed. The agent must never see `close_approaches` during the eval.
-- Also test tool accuracy (pinned data snapshot, independent recompute, known objects like ISS 25544 and the NuSat-47 vs Fengyun-1C debris pair) and agent tool-calling (right tool, valid arguments, answer numbers match tool output).
+- Also test tool accuracy (pinned data snapshot, independent recompute, known objects like ISS 25544 and Sentinel-1A 39634; the NuSat-47 vs Fengyun-1C pair only existed in Friday's snapshot) and agent tool-calling (right tool, valid arguments, answer numbers match tool output).
 - Chalk environment `spcwce09a241`. Sandboxes cost quota, keep lifetimes short. Pass `environment_id` on Chalk MCP calls. Open questions for the Chalk rep: hackathon access, Grok through the model gateway, template license.
 
 ## Observability (draft, nothing built yet; volumes and targets are estimates)

@@ -1,0 +1,120 @@
+{
+ "snapshot_id": "d29cf5404f55",
+ "built_utc": "2026-10-17T16:49:01+00:00",
+ "catalog": {
+  "objects_in_orbit": 35037,
+  "by_type": {
+   "PAY": 20146,
+   "DEB": 12541,
+   "R/B": 2295,
+   "UNK": 55
+  }
+ },
+ "orbits": {
+  "objects_with_orbit_elements": 20036,
+  "active_epoch_newest_utc": "2026-10-18T00:31:16+00:00",
+  "active_epoch_median_age_hours": 9.7
+ },
+ "socrates": {
+  "rows": 196744,
+  "rows_after_filters": 135036,
+  "window_utc": [
+   "2026-10-16 15:00:08.293",
+   "2026-10-23 14:59:59.665"
+  ]
+ },
+ "files": {
+  "active.json": {
+   "sha256_16": "d1380f5bf1596bc2",
+   "bytes": 7020088
+  },
+  "analyst.json": {
+   "sha256_16": "389fe286c547ab3b",
+   "bytes": 241058
+  },
+  "cosmos-1408-debris.json": {
+   "sha256_16": "54145603731a8dac",
+   "bytes": 1276
+  },
+  "cosmos-2251-debris.json": {
+   "sha256_16": "4a743fc3498740b4",
+   "bytes": 248495
+  },
+  "cubesat.json": {
+   "sha256_16": "4833c9e81019084a",
+   "bytes": 35189
+  },
+  "education.json": {
+   "sha256_16": "fd0e39034a648c26",
+   "bytes": 2499
+  },
+  "fengyun-1c-debris.json": {
+   "sha256_16": "16b593c1ade209e0",
+   "bytes": 836090
+  },
+  "geo.json": {
+   "sha256_16": "3c9989f02d64c2eb",
+   "bytes": 229014
+  },
+  "gnss.json": {
+   "sha256_16": "46c1e25e46896be5",
+   "bytes": 71000
+  },
+  "hulianwang.json": {
+   "sha256_16": "6bf781f896ac6c37",
+   "bytes": 95611
+  },
+  "iridium-33-debris.json": {
+   "sha256_16": "607a9e1b1ea00f51",
+   "bytes": 46119
+  },
+  "kuiper.json": {
+   "sha256_16": "137cf1146661e770",
+   "bytes": 162808
+  },
+  "last-30-days.json": {
+   "sha256_16": "a3bd6d54f4930874",
+   "bytes": 111828
+  },
+  "military.json": {
+   "sha256_16": "517777502c1f2e51",
+   "bytes": 18965
+  },
+  "oneweb.json": {
+   "sha256_16": "f6db875409db0c01",
+   "bytes": 271263
+  },
+  "planet.json": {
+   "sha256_16": "a9f28b43fc00153e",
+   "bytes": 51533
+  },
+  "qianfan.json": {
+   "sha256_16": "f28a0bdeb707b3bc",
+   "bytes": 105958
+  },
+  "satcat.csv": {
+   "sha256_16": "bdf90ad5c4453427",
+   "bytes": 6775422
+  },
+  "science.json": {
+   "sha256_16": "e3fed6042c5d9b82",
+   "bytes": 18952
+  },
+  "socrates-minrange.csv": {
+   "sha256_16": "e41c5a9299b9c2e9",
+   "bytes": 22320694
+  },
+  "starlink.json": {
+   "sha256_16": "e9f7aa6cacf6beae",
+   "bytes": 4679184
+  },
+  "stations.json": {
+   "sha256_16": "ea7d02cebac45cc5",
+   "bytes": 8849
+  },
+  "weather.json": {
+   "sha256_16": "9239b3cf324f56ea",
+   "bytes": 30076
+  }
+ }
+}
