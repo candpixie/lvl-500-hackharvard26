@@ -28,5 +28,8 @@ Rules, no model: `where should I put N ...` (rank), `what happens if N satellite
 ## Files and redeploying
 `chalk_tools/ask_core.py` (question parsing and answers), `chalk_tools/ask_app.py` (Flask wrapper), `chalk_tools/deploy_ask.py` (deploy and smoke test). Redeploy after changing data or code: `uv run --with chalkcompute --with chalkpy python -m chalk_tools.deploy_ask`. Local run: `uv run --with flask python chalk_tools/ask_app.py`. Tests: `uv run --with pytest --with flask python -m pytest tests -q` (141 pass).
 
-## Not done yet
-The junk-band eval (recommendations stay out of 750 to 850 km and dead-satellite lifetime under about 25 years) is not built on Chalk yet. The service is traced (`tracing` at 100%) but no monitors or dashboard exist.
+## Eval
+The junk-band eval (recommendations stay out of 750 to 850 km) ran on Chalk: 26 of 26 "where should I put it" answers stay out of 750 to 850 km with lifetime under 25 years; 58 of 58 answers grounded and within the guardrails. Read the caveats in `docs/eval_results.md` first (the bar is easy; it points the opposite way from the SOCRATES near-miss eval).
+
+## Observability
+A Chalk dashboard and monitors cover the tool functions and this service. The service is traced: `ask.answer` and `ask.respond` spans appear under service `orbit-ask`, and `GET /health` (token required) reports tracing status and export counts.

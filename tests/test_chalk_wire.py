@@ -141,9 +141,18 @@ class ChalkContractTests(unittest.TestCase):
         with patch.dict("os.environ", {"CHALK_REMOTE_FUNCTIONS": "1"}, clear=False):
             self.assertTrue(remote_functions_enabled())
             names = [tool["name"] for tool in _tools(True, True)]
-        for name in ("ask_chalk", "shell_crowding", "objects_near", "close_approaches", "rank_shells", "place_satellites"):
+        for name in ("ask_chalk", "shell_crowding", "objects_near", "close_approaches", "recommend_orbit", "rank_shells", "place_satellites"):
             self.assertIn(name, names)
-        self.assertNotIn("recommend_orbit", names)
+
+    def test_remote_kwargs_always_pass_every_argument(self):
+        from api.chalk import _remote_kwargs
+        self.assertEqual(_remote_kwargs("recommend_orbit", {"inclination_deg": 98}),
+                         {"inclination_deg": 98.0, "min_altitude_km": 400.0, "max_altitude_km": 1200.0,
+                          "top_n": 5, "inclination_band_deg": 10.0})
+        self.assertEqual(_remote_kwargs("objects_near", {"altitude_km": 550, "inclination_deg": 53})["limit"], 10)
+        self.assertEqual(_remote_kwargs("close_approaches", {"min_altitude_km": 500, "max_altitude_km": 550, "limit": 3})["limit"], 3)
+        with self.assertRaises(ValueError):
+            _remote_kwargs("recommend_orbit", {})
 
     def test_call_remote_uses_from_name_and_parses_json(self):
         seen = {}
@@ -179,7 +188,7 @@ class ChalkContractTests(unittest.TestCase):
                 result = call_remote("shell_crowding", {"altitude_km": 525})
         self.assertEqual(seen["name"], "shell_crowding")
         self.assertEqual(seen["timeout"], 5.0)
-        self.assertEqual(seen["kwargs"], {"altitude_km": 525.0})
+        self.assertEqual(seen["kwargs"], {"altitude_km": 525.0, "inclination_deg": None})
         self.assertEqual(result["data"]["total"], 9)
         self.assertEqual(result["snapshot_id"], "snap")
 

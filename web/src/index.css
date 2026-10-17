@@ -86,6 +86,35 @@ body {
   user-select: none;
 }
 
+/* Only the thumb shows: transparent track, no arrows. Width needs the webkit rules;
+   Firefox has no width control, so it gets the standard thin version. */
+.hud::-webkit-scrollbar {
+  width: 8px;
+}
+
+.hud::-webkit-scrollbar-track,
+.hud::-webkit-scrollbar-button,
+.hud::-webkit-scrollbar-corner {
+  background: transparent;
+  display: none;
+}
+
+.hud::-webkit-scrollbar-thumb {
+  background: rgba(201, 214, 227, 0.65);
+  border-radius: 4px;
+}
+
+.hud::-webkit-scrollbar-thumb:hover {
+  background: rgba(231, 242, 122, 0.8);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .hud {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(201, 214, 227, 0.65) transparent;
+  }
+}
+
 .hud::before {
   content: '';
   position: fixed;
@@ -316,6 +345,22 @@ h1 {
   gap: 2px;
 }
 
+.save-name {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: #c9d6e3;
+  background: rgba(5, 7, 11, 0.55);
+  border: 1px solid rgba(201, 214, 227, 0.28);
+}
+
+.save-name::placeholder {
+  color: rgba(201, 214, 227, 0.4);
+}
+
 .saved-item {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -324,12 +369,13 @@ h1 {
   border-bottom: 1px solid rgba(201, 214, 227, 0.12);
 }
 
-.saved-row {
+.saved-head {
   display: grid;
-  grid-template-columns: 1.4fr 0.7fr 1.3fr 0.9fr;
-  gap: 6px;
+  grid-template-columns: 1fr auto 1em;
+  align-items: baseline;
+  gap: 8px;
   width: 100%;
-  padding: 6px 0;
+  padding: 7px 0;
   text-align: left;
   font: inherit;
   font-size: 12px;
@@ -337,6 +383,11 @@ h1 {
   background: transparent;
   border: 0;
   cursor: pointer;
+}
+
+.saved-head:hover,
+.saved-head[aria-expanded='true'] {
+  color: #e7f27a;
 }
 
 .saved-remove {
@@ -356,8 +407,45 @@ h1 {
   color: #e7f27a;
 }
 
-.saved-row:hover {
+.saved-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-details {
+  grid-column: 1 / -1;
+  padding: 0 0 8px;
+}
+
+.saved-details dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 12px;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.saved-details dt {
+  color: rgba(201, 214, 227, 0.62);
+}
+
+.saved-details dd {
+  margin: 0;
+  text-align: right;
+  color: #c9d6e3;
+}
+
+.saved-view {
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
   color: #e7f27a;
+  background: transparent;
+  border: 1px solid rgba(231, 242, 122, 0.45);
+  cursor: pointer;
 }
 
 .field {
