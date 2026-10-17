@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from api.agent import ask, has_xai_key, imagine, speak, transcribe
-from api.chalk import enabled as chalk_enabled
+from api.chalk import ping as chalk_ping, redact
 from api.data import (
     DEFAULT_DIMS_M,
     get_close_approaches,
@@ -75,12 +75,18 @@ def demo():
 
 @app.get("/health")
 def health():
-    return {
+    chalk = chalk_ping()
+    up = bool(chalk.get("ok"))
+    body = {
         "ok": True,
         "xai": has_xai_key(),
-        "chalk": chalk_enabled(),
-        "reasoner": "chalk" if chalk_enabled() else "local",
+        "chalk": up,
+        "reasoner": "chalk" if up else "local",
     }
+    detail = chalk.get("detail")
+    if not up and detail and detail != "unset":
+        body["chalk_error"] = detail
+    return body
 
 
 @app.get("/shells")
@@ -123,7 +129,7 @@ def post_ask(body: AskBody):
     try:
         return ask(body.question)
     except Exception as exc:
-        raise HTTPException(502, f"Grok request failed: {exc}") from exc
+        raise HTTPException(502, f"Grok request failed: {redact(str(exc))}") from exc
 
 
 @app.post("/listen")
@@ -136,7 +142,7 @@ async def post_listen(file: UploadFile = File(...)):
     try:
         text = transcribe(audio, file.filename or "clip.webm", file.content_type or "audio/webm")
     except Exception as exc:
-        raise HTTPException(502, f"STT failed: {exc}") from exc
+        raise HTTPException(502, f"STT failed: {redact(str(exc))}") from exc
     return {"text": text}
 
 
@@ -147,7 +153,7 @@ def post_imagine(body: ImagineBody):
     try:
         return imagine(body.prompt)
     except Exception as exc:
-        raise HTTPException(502, f"Imagine failed: {exc}") from exc
+        raise HTTPException(502, f"Imagine failed: {redact(str(exc))}") from exc
 
 
 @app.post("/speak")
@@ -157,7 +163,7 @@ def post_speak(body: SpeakBody):
     try:
         audio = speak(body.text)
     except Exception as exc:
-        raise HTTPException(502, f"Voice request failed: {exc}") from exc
+        raise HTTPException(502, f"Voice request failed: {redact(str(exc))}") from exc
     return Response(content=audio, media_type="audio/mpeg")
 
 

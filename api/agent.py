@@ -8,7 +8,15 @@ from typing import Any
 import httpx
 from openai import OpenAI
 
-from api.chalk import ask_chalk, chalk_ok, enabled as chalk_enabled
+from api.chalk import (
+    REMOTE_FUNCTIONS,
+    ask_chalk,
+    call_remote,
+    chalk_ok,
+    enabled as chalk_enabled,
+    redact,
+    remote_functions_enabled,
+)
 from api.data import (
     DEFAULT_DIMS_M,
     DEFAULT_INC_DEG,
@@ -56,6 +64,69 @@ Call place_satellites for a specific altitude.
 Call get_shell_crowding and get_close_approaches around 800 km for debris questions.
 Call get_close_approaches without an altitude for the closest near miss this week.
 """
+
+SYSTEM_REMOTE = """
+Deployed Chalk functions, when CHALK_REMOTE_FUNCTIONS is on:
+  shell_crowding for a 50 km shell,
+  objects_near for who shares an altitude and inclination,
+  close_approaches for SOCRATES rows in a band (200 km up to but not including 2000 km; use 200 and 1999 for the closest this week).
+Prefer those over get_shell_crowding and get_close_approaches.
+rank_shells and place_satellites stay local until recommend_orbit exists. Use them for where to put satellites and for a specific altitude.
+If a Chalk function returns ok=false or fallback=true, use the local tool with the same job.
+"""
+
+REMOTE_TOOLS = [
+    {
+        "type": "function",
+        "name": "shell_crowding",
+        "description": (
+            "Chalk. Tracked-object counts in the 50 km shell that contains altitude_km. "
+            "Optional inclination_deg filters to a band. Returns ok, data, coverage, caveats, snapshot_id."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "altitude_km": {"type": "number"},
+                "inclination_deg": {"type": "number"},
+            },
+            "required": ["altitude_km"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "objects_near",
+        "description": (
+            "Chalk. Tracked objects whose perigee-apogee range covers altitude_km at a similar inclination. "
+            "Not a distance or collision estimate."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "altitude_km": {"type": "number"},
+                "inclination_deg": {"type": "number"},
+                "limit": {"type": "integer"},
+            },
+            "required": ["altitude_km", "inclination_deg"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "close_approaches",
+        "description": (
+            "Chalk. SOCRATES close approaches whose pair altitude is inside the band. "
+            "Quote max_probability only as SOCRATES's number. Band is 200 km inclusive to 2000 km exclusive."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "min_altitude_km": {"type": "number"},
+                "max_altitude_km": {"type": "number"},
+                "limit": {"type": "integer"},
+            },
+            "required": ["min_altitude_km", "max_altitude_km"],
+        },
+    },
+]
 
 LOCAL_TOOLS = [
     {
@@ -145,15 +216,28 @@ def _int(value, default=None):
     return default if n is None else int(n)
 
 
-def _tools() -> list[dict]:
-    if chalk_enabled():
-        return [CHALK_TOOL, *LOCAL_TOOLS]
-    return list(LOCAL_TOOLS)
+def _system(use_chalk: bool, use_remote: bool) -> str:
+    text = SYSTEM_CHALK if use_chalk else SYSTEM_LOCAL
+    if use_remote:
+        text += SYSTEM_REMOTE
+    return text
+
+
+def _tools(use_chalk: bool, use_remote: bool) -> list[dict]:
+    tools: list[dict] = []
+    if use_chalk:
+        tools.append(CHALK_TOOL)
+    if use_remote:
+        tools.extend(REMOTE_TOOLS)
+    tools.extend(LOCAL_TOOLS)
+    return tools
 
 
 def _run_tool(name: str, args: dict) -> Any:
     if name == "ask_chalk":
         return ask_chalk(str(args.get("question") or ""))
+    if name in REMOTE_FUNCTIONS:
+        return call_remote(name, args)
     if name == "get_shell_crowding":
         return get_shell_crowding(_num(args["alt_km"]))
     if name == "place_satellites":
@@ -216,33 +300,117 @@ def _focus_from_calls(tool_calls: list[dict]) -> dict | None:
             alt = row.get("mean_alt_km") or row.get("alt_km_1") or row.get("alt_km_2")
             if alt is not None:
                 other = {"altitude_km": alt, "inclination_deg": DEFAULT_INC_DEG}
+        elif name in REMOTE_FUNCTIONS and other is None:
+            other = _focus_from_remote(name, result)
     return rank_focus or place_focus or other
+
+
+def _focus_from_remote(name: str, result: Any) -> dict | None:
+    if not isinstance(result, dict) or result.get("ok") is False or result.get("fallback"):
+        return None
+    data = result.get("data")
+    if not isinstance(data, dict):
+        return None
+    if name == "shell_crowding":
+        shell = data.get("shell_km")
+        if isinstance(shell, list) and len(shell) == 2:
+            return {
+                "altitude_km": (float(shell[0]) + float(shell[1])) / 2,
+                "inclination_deg": DEFAULT_INC_DEG,
+            }
+    if name == "objects_near":
+        query = data.get("query") if isinstance(data.get("query"), dict) else {}
+        alt = query.get("altitude_km")
+        if alt is not None:
+            return {
+                "altitude_km": alt,
+                "inclination_deg": query.get("inclination_deg", DEFAULT_INC_DEG),
+            }
+    if name == "close_approaches":
+        rows = data.get("approaches")
+        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+            alt = rows[0].get("pair_altitude_km")
+            if alt is not None:
+                return {"altitude_km": alt, "inclination_deg": DEFAULT_INC_DEG}
+    return None
 
 
 def _reasoner(tool_calls: list[dict]) -> str:
     chalk_calls = [c for c in tool_calls if c["name"] == "ask_chalk"]
-    local_calls = [c for c in tool_calls if c["name"] != "ask_chalk"]
-    if chalk_calls and chalk_ok(chalk_calls[-1]["result"]) and not local_calls:
+    remote_calls = [c for c in tool_calls if c["name"] in REMOTE_FUNCTIONS]
+    local_calls = [c for c in tool_calls if c["name"] not in {"ask_chalk", *REMOTE_FUNCTIONS}]
+    chalk_live = bool(chalk_calls) and chalk_ok(chalk_calls[-1]["result"])
+    remote_live = any(isinstance(c["result"], dict) and c["result"].get("ok") and not c["result"].get("fallback") for c in remote_calls)
+    if (chalk_live or remote_live) and not local_calls:
         return "chalk"
-    if chalk_calls and local_calls:
-        return "local_fallback"
-    if chalk_calls:
+    if chalk_calls or remote_calls:
         return "local_fallback"
     return "local"
 
 
-def ask(question: str) -> dict:
+def _history_messages(history: list | None) -> list[dict[str, str]]:
+    """In-request turns only. Nothing is stored."""
+    if not isinstance(history, list):
+        return []
+    messages: list[dict[str, str]] = []
+    for turn in history[-6:]:
+        if not isinstance(turn, dict):
+            continue
+        if turn.get("role") in {"user", "assistant"} and turn.get("content"):
+            messages.append({"role": str(turn["role"]), "content": str(turn["content"])[:2000]})
+            continue
+        question = turn.get("question")
+        answer = turn.get("answer")
+        if question:
+            messages.append({"role": "user", "content": str(question)[:2000]})
+        if answer:
+            messages.append({"role": "assistant", "content": str(answer)[:2000]})
+    return messages
+
+
+def _context_note(context: dict | None) -> str:
+    if not isinstance(context, dict):
+        return ""
+    bits = []
+    for key in ("altitude_km", "inclination_deg", "selected_norad"):
+        value = context.get(key)
+        if value is None or value == "":
+            continue
+        bits.append(f"{key}={str(value)[:40]}")
+    return ", ".join(bits)
+
+
+def _input_messages(system: str, question: str, history: list | None, context: dict | None) -> list[dict]:
+    messages: list[dict] = [{"role": "system", "content": system}]
+    messages.extend(_history_messages(history))
+    user = question
+    note = _context_note(context)
+    if note:
+        user = f"{question}\n\nContext: {note}"
+    messages.append({"role": "user", "content": user})
+    return messages
+
+
+def ui_events_for(result: dict) -> list[dict]:
+    focus = result.get("focus") if isinstance(result, dict) else None
+    if not isinstance(focus, dict) or focus.get("altitude_km") is None:
+        return []
+    event = {"type": "focusOrbit", "altitude_km": focus["altitude_km"]}
+    if focus.get("inclination_deg") is not None:
+        event["inclination_deg"] = focus["inclination_deg"]
+    return [event]
+
+
+def ask(question: str, history: list | None = None, context: dict | None = None) -> dict:
     client = _client()
-    tools = _tools()
     use_chalk = chalk_enabled()
+    use_remote = remote_functions_enabled()
+    tools = _tools(use_chalk, use_remote)
     tool_calls: list[dict] = []
     first_choice: Any = {"type": "function", "name": "ask_chalk"} if use_chalk else "auto"
     response = client.responses.create(
         model=ASK_MODEL,
-        input=[
-            {"role": "system", "content": SYSTEM_CHALK if use_chalk else SYSTEM_LOCAL},
-            {"role": "user", "content": question},
-        ],
+        input=_input_messages(_system(use_chalk, use_remote), question, history, context),
         tools=tools,
         tool_choice=first_choice,
     )
@@ -259,7 +427,8 @@ def ask(question: str) -> dict:
             try:
                 result = _run_tool(item.name, args)
             except Exception as exc:
-                result = {"error": str(exc), "fallback": item.name == "ask_chalk"}
+                chalk_tool = item.name == "ask_chalk" or item.name in REMOTE_FUNCTIONS
+                result = {"error": redact(str(exc)), "fallback": chalk_tool}
             tool_calls.append({"name": item.name, "arguments": args, "result": result})
             outputs.append({
                 "type": "function_call_output",
@@ -294,6 +463,15 @@ def ask(question: str) -> dict:
         ],
         "reasoner": _reasoner(tool_calls),
     }
+
+
+def run_agent(question: str, history: list | None = None, context: dict | None = None) -> dict:
+    """Eval entrypoint. Same loop as ask(). history and context are not stored.
+
+    Returns the /ask fields plus ui_events derived from focus.
+    """
+    result = ask(question, history=history, context=context)
+    return {**result, "ui_events": ui_events_for(result)}
 
 
 def speak(text: str) -> bytes:
