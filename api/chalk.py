@@ -23,7 +23,7 @@ import httpx
 DEFAULT_TIMEOUT = 5.0
 PING_TIMEOUT = 2.0
 REMOTE_TIMEOUT = 5.0
-REMOTE_FUNCTIONS = ("shell_crowding", "objects_near", "close_approaches")
+REMOTE_FUNCTIONS = ("shell_crowding", "objects_near", "close_approaches", "recommend_orbit")
 
 _SECRET = re.compile(
     r"(?i)(bearer\s+\S+|api[_-]?key|token|secret|authorization|sk-|xai-|eyJ[A-Za-z0-9_-]{8,})"
@@ -169,6 +169,10 @@ def _fallback(kind: str, message: str) -> dict[str, Any]:
     return {"ok": False, "error": {"type": kind, "message": message}, "fallback": True}
 
 
+def _limit(args: dict) -> int:
+    return 10 if args.get("limit") in (None, "") else int(float(args["limit"]))
+
+
 def _remote_kwargs(name: str, args: dict) -> dict[str, Any]:
     def required(key: str) -> float:
         if args.get(key) in (None, ""):
@@ -176,26 +180,35 @@ def _remote_kwargs(name: str, args: dict) -> dict[str, Any]:
         return float(args[key])
 
     if name == "shell_crowding":
-        kwargs: dict[str, Any] = {"altitude_km": required("altitude_km")}
-        if args.get("inclination_deg") not in (None, ""):
-            kwargs["inclination_deg"] = float(args["inclination_deg"])
-        return kwargs
+        # RemoteFunction.from_name does not apply default arguments, so every argument is always passed.
+        inc = args.get("inclination_deg")
+        return {"altitude_km": required("altitude_km"),
+                "inclination_deg": None if inc in (None, "") else float(inc)}
     if name == "objects_near":
         kwargs = {
             "altitude_km": required("altitude_km"),
             "inclination_deg": required("inclination_deg"),
+            "limit": _limit(args),
         }
-        if args.get("limit") not in (None, ""):
-            kwargs["limit"] = int(float(args["limit"]))
         return kwargs
     if name == "close_approaches":
         kwargs = {
             "min_altitude_km": required("min_altitude_km"),
             "max_altitude_km": required("max_altitude_km"),
+            "limit": _limit(args),
         }
-        if args.get("limit") not in (None, ""):
-            kwargs["limit"] = int(float(args["limit"]))
         return kwargs
+    if name == "recommend_orbit":
+        def num(key: str, default: float) -> float:
+            return default if args.get(key) in (None, "") else float(args[key])
+
+        return {
+            "inclination_deg": required("inclination_deg"),
+            "min_altitude_km": num("min_altitude_km", 400.0),
+            "max_altitude_km": num("max_altitude_km", 1200.0),
+            "top_n": int(num("top_n", 5)),
+            "inclination_band_deg": num("inclination_band_deg", 10.0),
+        }
     raise ValueError(f"unknown tool {name}")
 
 

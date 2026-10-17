@@ -37,3 +37,30 @@ For each mission (an inclination and an altitude band), a picker chooses one 50 
 
 ## Reproduce
 Local: `uv run python -m chalk_tools.eval_local`. On Chalk: `uv run --with chalkcompute --with chalkpy python -m chalk_tools.run_eval` (deploys `pick_orbit` and `shell_safety`, uploads a dataset, runs the evaluation).
+
+---
+
+# Junk-band eval of the Chalk ask service (the team's eval spec)
+
+Evaluation `ask-junk-band`, run `418294b0-b957-42ae-b8a2-e93f93575f48` on Chalk (env `spcwce09a241`). The task is the same `ask_core.answer` the live `POST /ask` endpoint serves (`docs/chalk-ask-service.md`). 58 questions: the four demo questions plus varied counts, sizes, altitudes and mission phrases. Identical to the local dry run (`uv run python -m chalk_tools.junk_eval_local`).
+
+| Score | Result |
+|---|---|
+| `junk_band`: a "where should I put it" answer recommends a shell outside 750 to 850 km AND with dead-satellite lifetime under 25 years | **26 / 26** |
+| `grounded`: every number spoken comes from a tool result, the tool arguments, or the question | 58 / 58 |
+| `guardrails_ok`: no "safe", no "collision probability" outside a SOCRATES quote, tracked-objects wording | 58 / 58 |
+| answered (no error), task errors | 58 / 58, 0 |
+
+## Read this before quoting 26 / 26
+- **It is an easy bar.** All 26 "where" questions get the same answer: focus 525 km, dead-satellite lifetime about 10.6 years. The team's `rank()` barely changes with satellite count, size or phrasing (a 4 m satellite and a 40 m one, one satellite or a million, give the same top shells 500, 550, 600), and the shell model ignores inclination. A fixed "always 525 km" answer would also score 26 / 26. The test does have teeth against naive pickers: fewest objects (1,925 km), busiest shell, fewest debris, always 800 km, and always 1,000 km all fail it.
+- **What it shows:** the recommendation stays out of the debris band and favors shells where wreckage comes down within about a decade. **What it does not show:** that the recommendation responds to the question.
+- **The rate and lifetime numbers are rough.** The decay table is rule-of-thumb anchors (the team's own docs say to verify against a published source before a slide).
+
+## It points the other way from my near-miss eval
+The recommended shell, 500 to 550 km, scores **0.13** (at 53 degrees) and **0.07** (at 98 degrees) on the SOCRATES near-miss key from the first eval above, where 1.0 means the fewest predicted close approaches of the 16 shells from 400 to 1,200 km. The shells with the fewest predicted close approaches are 950 to 1,150 km. These are different objectives, and both are reasonable:
+- The team's score is expected harm = collision rate x years the wreckage stays up. That favors low shells where debris clears quickly, even though they are crowded.
+- The near-miss key counts predicted close approaches this week (pairs including at least one active satellite, same-constellation pairs removed), which is highest around the low shells where Starlink-like constellations fly.
+So the honest framing for judges is "we rank by expected harm including how long wreckage persists, not by predicted near-miss count, and here is how the two differ," not "500 km has the fewest close approaches."
+
+## Not yet done
+Monitors and a dashboard; running my tool-calling cases against the real Grok loop (`from agent import run_agent`; needs an xAI key).

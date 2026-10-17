@@ -68,6 +68,10 @@ Rules:
 - Do not frame SpaceX as a villain. Neutral: where to build safely.
 - Keep the spoken answer to about 3 short sentences.
 - Default satellite size is 4 x 2 x 1 meters unless the user says otherwise.
+- Out of scope: the tools only cover tracked objects between 200 and 2000 km (low Earth orbit). For anything outside
+  that (geostationary or other high orbits, the Moon or planets, launch or weather questions, anything unrelated to
+  orbit), call NO tool. Say in one sentence that it is outside what you cover, and offer a low Earth orbit question
+  you can answer. Do not guess numbers. Greetings, thanks and questions about what a word here means need no tool either.
 """
 
 SYSTEM_CHALK = SYSTEM_BASE + """
@@ -91,9 +95,14 @@ SYSTEM_REMOTE = """
 Deployed Chalk functions, when CHALK_REMOTE_FUNCTIONS is on:
   shell_crowding for a 50 km shell,
   objects_near for who shares an altitude and inclination,
-  close_approaches for SOCRATES rows in a band (200 km up to but not including 2000 km; use 200 and 1999 for the closest this week).
+  close_approaches for SOCRATES rows in a band (200 km up to but not including 2000 km; use 200 and 1999 for the closest this week),
+  recommend_orbit for "where should I put a satellite" when the user gives or implies an inclination or a mission
+  (ISS-like 51.6, Starlink-like 53, sun-synchronous about 98, polar about 90, equatorial 0). It ranks 50 km shells,
+  quietest first. Quiet means few tracked objects, never safe.
 Prefer those over get_shell_crowding and get_close_approaches.
-rank_shells and place_satellites stay local until recommend_orbit exists. Use them for where to put satellites and for a specific altitude.
+Call only one tool for one job: never call a Chalk function and its local twin for the same question.
+rank_shells and place_satellites stay local. Use rank_shells when the user gives a satellite count or size and no orbit
+or mission, and place_satellites for a specific altitude with a count.
 If a Chalk function returns ok=false or fallback=true, use the local tool with the same job.
 """
 
@@ -146,6 +155,25 @@ REMOTE_TOOLS = [
                 "limit": {"type": "integer"},
             },
             "required": ["min_altitude_km", "max_altitude_km"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "recommend_orbit",
+        "description": (
+            "Chalk. Ranks 50 km shells for a mission inclination, quietest first (fewest tracked objects expected "
+            "at a similar inclination). Not a safety guarantee. Defaults: 400 to 1200 km, top 5, 10 degree band."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "inclination_deg": {"type": "number"},
+                "min_altitude_km": {"type": "number"},
+                "max_altitude_km": {"type": "number"},
+                "top_n": {"type": "integer"},
+                "inclination_band_deg": {"type": "number"},
+            },
+            "required": ["inclination_deg"],
         },
     },
 ]
@@ -407,6 +435,13 @@ def _focus_from_remote(name: str, result: Any) -> dict | None:
                 "altitude_km": alt,
                 "inclination_deg": query.get("inclination_deg", DEFAULT_INC_DEG),
             }
+    if name == "recommend_orbit":
+        cands = data.get("candidates")
+        query = data.get("query") if isinstance(data.get("query"), dict) else {}
+        if isinstance(cands, list) and cands and isinstance(cands[0].get("shell_km"), list):
+            lo, hi = cands[0]["shell_km"]
+            return {"altitude_km": (float(lo) + float(hi)) / 2,
+                    "inclination_deg": query.get("inclination_deg", DEFAULT_INC_DEG)}
     if name == "close_approaches":
         rows = data.get("approaches")
         if isinstance(rows, list) and rows and isinstance(rows[0], dict):
