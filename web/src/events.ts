@@ -3,20 +3,113 @@
 export interface FocusOrbit {
   altitude_km: number
   inclination_deg: number
+  count?: number
+  dims_m?: number[]
+}
+
+export interface AskToolCall {
+  name: string
+  arguments?: Record<string, unknown>
+  result?: unknown
+}
+
+export type UiEvent =
+  | { type: 'focusOrbit'; altitude_km: number; inclination_deg: number; count?: number; dims_m?: number[] }
+  | { type: 'selectObject'; norad: number }
+  | { type: 'showApproach'; norad_1: number; norad_2: number }
+
+export interface AskContext {
+  altitude_km: number
+  inclination_deg: number
+  selected_norad: number | null
 }
 
 export interface AskResult {
   answer: string
   focus: FocusOrbit | null
-  tool_calls: { name: string; arguments: Record<string, unknown> }[]
+  ui_events?: UiEvent[]
+  tool_calls: AskToolCall[]
   reasoner?: 'chalk' | 'local' | 'local_fallback'
 }
 
-export async function askGrok(question: string): Promise<AskResult> {
+function missionFromArgs(args: Record<string, unknown> | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
+  if (!args) return {}
+  const next: Pick<FocusOrbit, 'count' | 'dims_m'> = {}
+  if (typeof args.count === 'number' && Number.isFinite(args.count) && args.count > 0) {
+    next.count = Math.round(args.count)
+  }
+  if (Array.isArray(args.dims_m) && args.dims_m.length > 0) {
+    const dims = args.dims_m.map(Number).filter((value) => Number.isFinite(value))
+    if (dims.length > 0) next.dims_m = dims
+  }
+  return next
+}
+
+function missionFromCalls(calls: AskToolCall[] | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
+  if (!calls?.length) return {}
+  const first = calls[0]
+  if (first.name !== 'rank_shells' && first.name !== 'place_satellites') return {}
+  return missionFromArgs(first.arguments)
+}
+
+function missionFromAny(calls: AskToolCall[] | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
+  if (!calls) return {}
+  for (const call of calls) {
+    if (call.name === 'rank_shells' || call.name === 'place_satellites') {
+      return missionFromArgs(call.arguments)
+    }
+  }
+  return {}
+}
+
+/** Copy count/size from Ask onto focus so the HUD scores the same mission. */
+export function focusWithMission(result: AskResult): FocusOrbit | null {
+  if (!result.focus) return null
+  let count = result.focus.count
+  let dims = result.focus.dims_m
+  const chalk = result.tool_calls.find((call) => call.name === 'ask_chalk')
+  const body = chalk?.result
+  if (body && typeof body === 'object') {
+    const nested = body as { focus?: FocusOrbit; tool_calls?: AskToolCall[] }
+    const fromChalk = missionFromCalls(nested.tool_calls)
+    count ??= nested.focus?.count ?? fromChalk.count
+    dims ??= nested.focus?.dims_m ?? fromChalk.dims_m
+  }
+  const fromLocal = missionFromCalls(result.tool_calls)
+  const fromAny = missionFromAny(result.tool_calls)
+  count ??= fromLocal.count ?? fromAny.count
+  dims ??= fromLocal.dims_m ?? fromAny.dims_m
+  return {
+    ...result.focus,
+    ...(count != null ? { count } : {}),
+    ...(dims ? { dims_m: dims } : {}),
+  }
+}
+
+/** Normalize ask payload into a list of UI events (supports legacy `focus` only). */
+export function eventsFromAsk(result: AskResult): UiEvent[] {
+  const focus = focusWithMission(result)
+  const others = (result.ui_events ?? []).filter((event) => event.type !== 'focusOrbit')
+  if (focus) {
+    return [
+      {
+        type: 'focusOrbit',
+        altitude_km: focus.altitude_km,
+        inclination_deg: focus.inclination_deg,
+        count: focus.count,
+        dims_m: focus.dims_m,
+      },
+      ...others,
+    ]
+  }
+  return result.ui_events?.length ? result.ui_events : []
+}
+
+export async function askGrok(question: string, context?: AskContext): Promise<AskResult> {
   const response = await fetch('/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, context }),
   })
   const payload = (await response.json().catch(() => ({}))) as AskResult & { detail?: string }
   if (!response.ok) {

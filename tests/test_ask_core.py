@@ -28,6 +28,7 @@ DEMO = [
     ("How crowded is 550 km?", {"intent": "crowding", "alt_km": 550.0}),
     ("What if I put 5,000 satellites at 700 km?", {"intent": "place", "count": 5000, "alt_km": 700.0}),
     ("Where should one cubesat go for a polar orbit?", {"intent": "rank", "count": 1, "inc_deg": 90.0}),
+    ("what is the best place to put 1 satellite. show me the highest rating", {"intent": "rank", "count": 1}),
     ("Where should I put 2.5 million 6 meter satellites in a sun-synchronous orbit", {"intent": "rank", "count": 2_500_000, "inc_deg": 98.0, "dims_m": [6.0, 3.0, 1.5]}),
     ("what is the weather", {"intent": None}),
 ])
@@ -40,6 +41,7 @@ def test_parse_question(q, expect):
 def test_demo_questions_match_the_documented_answers():
     r1 = A.answer(DEMO[0])
     assert r1["focus"]["altitude_km"] == 525 and [c["name"] for c in r1["tool_calls"]] == ["rank_shells"]
+    assert r1["focus"]["count"] == 1000 and r1["focus"]["dims_m"] == [4.0, 2.0, 1.0]
     assert [row["alt_lo"] for row in r1["tool_calls"][0]["result"]] == [500, 550, 600]  # docs: safest 500/550/600
     r2 = A.answer(DEMO[1])
     score_900 = r2["tool_calls"][0]["result"]["score"]
@@ -66,6 +68,11 @@ def test_answers_follow_the_house_rules(q):
     assert "lower bound" in r["answer"].lower() or "no predicted" in r["answer"].lower() or "lists no" in r["answer"].lower()
     assert len(r["answer"].split(". ")) <= 6  # short enough to speak
     json.dumps(r)
+
+
+def test_one_satellite_focus_carries_count():
+    r = A.answer("what is the best place to put 1 satellite. show me the highest rating")
+    assert r["focus"]["count"] == 1 and r["focus"]["altitude_km"] == 525
 
 
 def test_focus_is_valid_whenever_a_shell_is_recommended():

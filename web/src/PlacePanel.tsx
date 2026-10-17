@@ -29,6 +29,16 @@ function formatLength(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }
 
+function scoreTone(score: number) {
+  if (score >= 70) return 'safer'
+  if (score >= 45) return 'mixed'
+  return 'crowded'
+}
+
+function formatScore(score: number) {
+  return Number.isInteger(score) ? String(Math.round(score)) : score.toFixed(1)
+}
+
 interface SavedPlacement {
   id: number
   altitude: number
@@ -39,14 +49,17 @@ interface SavedPlacement {
 
 interface PlacePanelProps {
   altitude: number
+  altitudeChosen: boolean
   inclination: number
   count: number
+  size: number
   shells: ShellRow[] | null
   shellError: string | null
   debrisOnly: boolean
   onAltitude: (value: number) => void
   onInclination: (value: number) => void
   onCount: (value: number) => void
+  onSize: (value: number) => void
   onDebrisOnly: (value: boolean) => void
   onScene: (scene: { altitude: number; inclination?: number; count?: number; debrisOnly?: boolean }) => void
   onVisualizeShell: () => void
@@ -54,26 +67,36 @@ interface PlacePanelProps {
 
 export default function PlacePanel({
   altitude,
+  altitudeChosen,
   inclination,
   count,
+  size,
   shells,
   shellError,
   debrisOnly,
   onAltitude,
   onInclination,
   onCount,
+  onSize,
   onDebrisOnly,
   onScene,
   onVisualizeShell,
 }: PlacePanelProps) {
   const current = shells ? shellForAltitude(shells, altitude) : null
-  const [size, setSize] = useState(4)
   const [place, setPlace] = useState<PlaceResult | null>(null)
   const [ranks, setRanks] = useState<RankRow[]>([])
   const [showRanks, setShowRanks] = useState(false)
   const [miss, setMiss] = useState<NearMiss | null>(null)
   const [saved, setSaved] = useState<SavedPlacement[]>([])
   const nextSaveId = useRef(1)
+  const [touched, setTouched] = useState(false)
+  const dims = dimsFor(size)
+  const ready = altitudeChosen || touched
+  const tone = ready && place ? scoreTone(place.score) : null
+
+  function commit() {
+    setTouched(true)
+  }
 
   useEffect(() => {
     const nextDims = dimsFor(size)
@@ -104,7 +127,8 @@ export default function PlacePanel({
   function chooseSize(value: string) {
     const next = Number(value)
     if (!Number.isFinite(next)) return
-    setSize(Math.min(20, Math.max(1, next)))
+    onSize(Math.min(20, Math.max(1, next)))
+    commit()
   }
 
   function savePlacement() {
@@ -129,9 +153,10 @@ export default function PlacePanel({
           Your mission
         </h2>
         <label className="field">
-          <span className="field-label step-size">
-            <span>
-              <span className="num">{formatLength(size)} m</span> longest side
+          <span className="field-label">
+            Size
+            <span className="num">
+              {formatLength(dims[0])}×{formatLength(dims[1])}×{formatLength(dims[2])} m
             </span>
           </span>
           <input
@@ -141,7 +166,7 @@ export default function PlacePanel({
             max={20}
             step={1}
             value={size}
-            aria-label="Longest side in meters"
+            aria-label="Satellite size in meters"
             onChange={(event) => chooseSize(event.target.value)}
           />
         </label>
@@ -151,13 +176,21 @@ export default function PlacePanel({
               key={item.value}
               type="button"
               aria-pressed={count === item.value}
-              onClick={() => onCount(item.value)}
+              onClick={() => {
+                if (item.value !== count) commit()
+                onCount(item.value)
+              }}
             >
               <span className="num">{item.label}</span>
               <span>sats</span>
             </button>
           ))}
         </div>
+        {!COUNTS.some((item) => item.value === count) && (
+          <p className="shell-line">
+            <span className="num">{formatCount(count)}</span> sats
+          </p>
+        )}
       </section>
 
       <section className="step">
@@ -180,7 +213,15 @@ export default function PlacePanel({
               const active = altitude >= row.alt_lo && altitude < row.alt_hi
               return (
                 <li key={row.alt_lo}>
-                  <button type="button" className="rank-row" aria-pressed={active} onClick={() => onAltitude(mid)}>
+                  <button
+                    type="button"
+                    className="rank-row"
+                    aria-pressed={active}
+                    onClick={() => {
+                      commit()
+                      onAltitude(mid)
+                    }}
+                  >
                     <span className="rank-score num">{row.score}</span>
                     <span>
                       <strong>
@@ -204,10 +245,12 @@ export default function PlacePanel({
             type="range"
             min={200}
             max={1950}
-            step={10}
+            step={5}
             value={altitude}
-            onChange={(event) => onAltitude(Number(event.target.value))}
-            onPointerUp={(event) => onAltitude(Number(event.currentTarget.value))}
+            onChange={(event) => {
+              commit()
+              onAltitude(Number(event.target.value))
+            }}
           />
         </label>
 
@@ -222,30 +265,39 @@ export default function PlacePanel({
             max={180}
             step={1}
             value={inclination}
-            onChange={(event) => onInclination(Number(event.target.value))}
+            onChange={(event) => {
+              commit()
+              onInclination(Number(event.target.value))
+            }}
           />
         </label>
 
         {shellError && <p className="shell-note">{shellError}</p>}
         {!shells && !shellError && <p className="shell-note">Loading shell counts</p>}
         {current && (
-          <>
-            <p className="shell-count num">{formatCount(shellTotal(current))}</p>
-            <p className="shell-range num">{shellRange(current)}</p>
-            <p className="shell-majority">{majorityLabel(current)}</p>
-            <p
-              className="source"
-              title="CelesTrak SATCAT, objects with no decay date. Mean altitude is (apogee + perigee) / 2."
-            >
-              CelesTrak SATCAT · 50 km shells
-            </p>
-          </>
+          <p
+            className="shell-line"
+            title="CelesTrak SATCAT. Mean altitude is (apogee + perigee) / 2. Tracked objects only, lower bound."
+          >
+            <span className="num">{formatCount(shellTotal(current))}</span> tracked ·{' '}
+            <span className="num">{shellRange(current)}</span> · {majorityLabel(current).toLowerCase()}
+          </p>
         )}
-        <p className="shell-note">
-          Altitude exaggerated <span className="num">5.5×</span>
-          <br />
-          Enlarged, not to scale
-        </p>
+
+        <div className="presets beat-presets">
+          <button type="button" onClick={() => onScene({ altitude: 900, count: 1_000_000, debrisOnly: false })}>
+            <span>1M at 900 km</span>
+            <span>self-crowding</span>
+          </button>
+          <button type="button" onClick={() => onScene({ altitude: 525, debrisOnly: false })}>
+            <span>Safest 500 km</span>
+            <span>clears in years</span>
+          </button>
+          <button type="button" onClick={() => onScene({ altitude: 825, debrisOnly: true })}>
+            <span>Debris 800 km</span>
+            <span>junk stays</span>
+          </button>
+        </div>
 
         <button
           className="debris-toggle"
@@ -257,45 +309,60 @@ export default function PlacePanel({
         </button>
       </section>
 
-      <section className="step">
-          <h2 className="step-title">
-            <span className="step-num num">3</span>
-            Impact
-          </h2>
-          {place && (
-            <p
-              className="shell-note"
-              title={`${place.note}. Expected collisions per year is a first-order model. Lifetime is approximate.`}
-            >
-              <span className="num">{Math.round(place.score)}/100</span>, higher is safer · wreckage stays
-              <span className="num">{yearsLabel(place.dead_sat_lifetime_years)}</span>
-              <br />
-              <span className="num">{formatCollisionCount(place.collisions_per_year)}</span> expected collisions per
-              year (first-order model)
-              <br />
-              <span className="num">
-                {formatCount(count)} × {formatLength(size)} m
-              </span>{' '}
-              sats · tracked objects only, lower bound
+      <section className="step step-impact">
+        <h2 className="step-title">
+          <span className="step-num num">3</span>
+          Impact
+        </h2>
+        <div className="impact-score">
+          {ready && place ? (
+            <>
+              <button
+                type="button"
+                className="impact-rating"
+                data-tone={tone}
+                aria-describedby="impact-tip"
+                aria-label={`${formatScore(place.score)} out of 100, ${tone}`}
+              >
+                <span className="impact-num num">{formatScore(place.score)}</span>
+                <span className="impact-den">/100</span>
+                <span className="impact-verdict">{tone}</span>
+              </button>
+              <div id="impact-tip" className="impact-tip" role="tooltip">
+                <p>Higher is safer. Score mixes collision harm, how long wreckage stays, and how dense this shell is today.</p>
+                <p>
+                  Wreckage {yearsLabel(place.dead_sat_lifetime_years)} ·{' '}
+                  <span className="num">{formatCollisionCount(place.collisions_per_year)}</span> collisions/yr
+                  (first-order) · {formatCount(Math.round(place.objects_before))} objects already here.
+                </p>
+                <p>Tracked objects only, lower bound.</p>
+              </div>
+            </>
+          ) : (
+            <p className="impact-rating impact-empty" aria-label="No score yet">
+              <span className="impact-num num">–</span>
+              <span className="impact-den">/100</span>
             </p>
           )}
-          {miss && (
-            <button
-              type="button"
-              className="quieter miss-card"
-              onClick={() => miss.mean_alt_km != null && onScene({ altitude: miss.mean_alt_km, debrisOnly: true })}
-            >
-              <strong>
-                {miss.name_1.replace(/\s*\[.+$/, '')} vs {miss.name_2.replace(/\s*\[.+$/, '')}
-              </strong>
-              {(miss.miss_distance_km * 1000).toFixed(0)} m · {miss.relative_speed_km_s.toFixed(1)} km/s ·{' '}
-              {miss.time_utc.slice(0, 10)}
-              <span>SOCRATES closest miss this week · tracked objects only</span>
-            </button>
-          )}
-        </section>
+        </div>
+        {ready && miss && (
+          <button
+            type="button"
+            className="quieter miss-card"
+            onClick={() => miss.mean_alt_km != null && onScene({ altitude: miss.mean_alt_km, debrisOnly: true })}
+          >
+            <strong>
+              {miss.name_1.replace(/\s*\[.+$/, '')} vs {miss.name_2.replace(/\s*\[.+$/, '')}
+            </strong>
+            {(miss.miss_distance_km * 1000).toFixed(0)} m · {miss.relative_speed_km_s.toFixed(1)} km/s ·{' '}
+            {miss.time_utc.slice(0, 10)}
+            <span>Closest miss this week · SOCRATES</span>
+          </button>
+        )}
+      </section>
 
-      <section className="step">
+      {ready && (
+        <section className="step">
           <h2 className="step-title">
             <span className="step-num num">4</span>
             Save & compare
@@ -324,10 +391,11 @@ export default function PlacePanel({
             </ol>
           )}
         </section>
+      )}
 
       <button type="button" className="quieter" onClick={onVisualizeShell}>
         <strong>Visualize this shell</strong>
-        <span className="quieter-note">Grok Imagine · illustration of nearby objects</span>
+        Illustration of nearby objects
       </button>
     </div>
   )

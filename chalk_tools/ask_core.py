@@ -123,7 +123,7 @@ def parse_question(q: str) -> dict:
         out["intent"] = "why"
     elif re.search(r"what (?:happens )?if|what would happen|suppose", t) and out["alt_km"] is not None:
         out["intent"] = "place"
-    elif re.search(r"\bwhere\b|best (?:orbit|altitude|shell)|recommend|which (?:orbit|altitude|shell)", t):
+    elif re.search(r"\bwhere\b|best (?:place|orbit|altitude|shell)|recommend|which (?:orbit|altitude|shell)|highest rating", t):
         out["intent"] = "rank"
     elif out["alt_km"] is not None:
         out["intent"] = "place" if out["count"] else "crowding"
@@ -154,6 +154,15 @@ def _clean(value):
 
 def _call(name: str, arguments: dict, result) -> dict:
     return {"name": name, "arguments": arguments, "result": _clean(result)}
+
+
+def _focus(alt_km, inc_deg, count=None, dims_m=None) -> dict:
+    out = {"altitude_km": alt_km, "inclination_deg": inc_deg}
+    if count is not None:
+        out["count"] = int(count)
+    if dims_m is not None:
+        out["dims_m"] = [float(x) for x in dims_m]
+    return out
 
 
 def _pair(r: dict) -> str:
@@ -236,7 +245,7 @@ def answer(question: str) -> dict:
                 f"and a dead satellite there would stay up {_years(res['dead_sat_lifetime_years'])}. "
                 f"That scores {_r(res['score'])} out of 100, against {_r(best['score'])} for {best['alt_lo']} to {best['alt_hi']} kilometers. "
                 f"{NOTE_SENTENCE}")
-        return {"answer": text, "focus": {"altitude_km": alt, "inclination_deg": inc},
+        return {"answer": text, "focus": _focus(alt, inc, count, dims),
                 "tool_calls": [_call("place_satellites", {"alt_km": alt, "inc_deg": inc, "dims_m": dims, "count": count}, res),
                                _call("rank_shells", {"count": count, "dims_m": dims, "top": 1}, [best])], "note": NOTE}
     if p["intent"] == "rank":
@@ -247,7 +256,7 @@ def answer(question: str) -> dict:
                 f"{rows[1]['alt_lo']} to {rows[1]['alt_hi']} and {rows[2]['alt_lo']} to {rows[2]['alt_hi']}. "
                 f"The top shell holds about {_r(top['objects']):,} tracked objects today, and a dead satellite there would come down in "
                 f"{_years(top['dead_sat_lifetime_years'])}. {NOTE_SENTENCE}")
-        return {"answer": text, "focus": {"altitude_km": top["alt_lo"] + 25, "inclination_deg": inc},
+        return {"answer": text, "focus": _focus(top["alt_lo"] + 25, inc, count, dims),
                 "tool_calls": [_call("rank_shells", {"count": count, "dims_m": dims, "top": 3}, rows)], "note": NOTE}
     return {"error": "I can answer where to place satellites, what happens at an altitude, why an altitude is crowded, "
                      "and the closest near miss this week."}

@@ -131,10 +131,15 @@ def get_close_approaches(alt_km: float | None = None, limit: int = 10, band_km: 
 
 
 def focus_from_place(result: dict) -> dict:
-    return {
+    out = {
         "altitude_km": result["alt_km"],
         "inclination_deg": result.get("inc_deg", DEFAULT_INC_DEG),
     }
+    if result.get("count") is not None:
+        out["count"] = result["count"]
+    if result.get("dims_m") is not None:
+        out["dims_m"] = result["dims_m"]
+    return out
 
 
 def focus_from_rank(rows: list[dict], inc_deg: float = DEFAULT_INC_DEG) -> dict | None:

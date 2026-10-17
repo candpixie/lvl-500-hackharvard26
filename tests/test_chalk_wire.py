@@ -200,6 +200,60 @@ class ChalkContractTests(unittest.TestCase):
         mixed = calls + [{"name": "rank_shells", "result": []}]
         self.assertEqual(_reasoner(mixed), "local_fallback")
 
+    def test_focus_copies_count_from_rank_tools(self):
+        calls = [{
+            "name": "ask_chalk",
+            "result": {
+                "answer": "500 to 550.",
+                "focus": {"altitude_km": 525, "inclination_deg": 53},
+                "tool_calls": [{
+                    "name": "rank_shells",
+                    "arguments": {"count": 1, "dims_m": [4, 2, 1], "top": 3},
+                    "result": [{"alt_lo": 500, "alt_hi": 550}],
+                }],
+            },
+        }]
+        focus = _focus_from_calls(calls)
+        self.assertEqual(focus["altitude_km"], 525)
+        self.assertEqual(focus["count"], 1)
+        self.assertEqual(focus["dims_m"], [4.0, 2.0, 1.0])
+
+    def test_why_focus_does_not_steal_rank_count(self):
+        calls = [{
+            "name": "ask_chalk",
+            "result": {
+                "answer": "800 is debris.",
+                "focus": {"altitude_km": 825, "inclination_deg": 53},
+                "tool_calls": [
+                    {"name": "get_shell_crowding", "arguments": {"alt_km": 800}, "result": {"alt_lo": 800, "alt_hi": 850}},
+                    {"name": "rank_shells", "arguments": {"count": 1, "dims_m": [4, 2, 1], "top": 1}, "result": []},
+                ],
+            },
+        }]
+        focus = _focus_from_calls(calls)
+        self.assertEqual(focus["altitude_km"], 825)
+        self.assertNotIn("count", focus)
+
+    def test_fallback_rank_fills_count_onto_chalk_focus(self):
+        calls = [
+            {
+                "name": "ask_chalk",
+                "result": {
+                    "answer": "500 to 550.",
+                    "focus": {"altitude_km": 525, "inclination_deg": 53},
+                    "tool_calls": [],
+                },
+            },
+            {
+                "name": "rank_shells",
+                "arguments": {"count": 1, "dims_m": [4, 2, 1]},
+                "result": [{"alt_lo": 500, "alt_hi": 550}],
+            },
+        ]
+        focus = _focus_from_calls(calls)
+        self.assertEqual(focus["altitude_km"], 525)
+        self.assertEqual(focus["count"], 1)
+
     def test_context_drops_unknown_keys(self):
         note = _context_note({
             "altitude_km": 550,

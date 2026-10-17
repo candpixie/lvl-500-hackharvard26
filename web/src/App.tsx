@@ -11,19 +11,20 @@ import {
   Vector3,
   type MeshPhongMaterial,
   type PerspectiveCamera,
+  type SpriteMaterial,
 } from 'three'
 import '@fontsource-variable/jost'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import AgentPanel from './AgentPanel.tsx'
-import type { FocusOrbit, Neighborhood } from './events.ts'
+import type { FocusOrbit, Neighborhood, UiEvent } from './events.ts'
 import { imagineGrok, neighborhoodPrompt } from './events.ts'
 import { createFleet, type Fleet } from './fleet.ts'
 import NeighborhoodCard from './NeighborhoodCard.tsx'
 import ObjectCard from './ObjectCard.tsx'
 import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
-import { GLOBE_RADIUS, orbitLine, ORBIT_COLOR } from './place.ts'
+import { GLOBE_RADIUS, goldStarSprite, orbitLine, ORBIT_COLOR } from './place.ts'
 import {
   exaggeratePoint,
   neighborhoodAround,
@@ -212,11 +213,14 @@ function fleetMaterial(altitudeKm: number) {
   })
 }
 
+const DEFAULT_INCLINATION = 53
+
 export default function App() {
   const hostRef = useRef<HTMLDivElement>(null)
   const applyShellRef = useRef<(altitudeKm: number) => void>(() => {})
   const debrisRef = useRef<(on: boolean) => void>(() => {})
-  const flyRef = useRef<(focus: FocusOrbit) => void>(() => {})
+  const flyRef = useRef<(focus: FocusOrbit, opts?: { pin?: boolean; look?: boolean }) => void>(() => {})
+  const selectByNoradRef = useRef<(norad: number) => boolean>(() => false)
   const catalogRef = useRef<CatalogPick | null>(null)
   const vizGen = useRef(0)
   const startVizRef = useRef<(hood: Neighborhood) => void>(() => {})
@@ -235,8 +239,11 @@ export default function App() {
     image: { src: string; label: string } | null
   } | null>(null)
   const [altitude, setAltitude] = useState(START_ALTITUDE)
-  const [inclination, setInclination] = useState(53)
+  const [altitudeChosen, setAltitudeChosen] = useState(false)
+  const [inclination, setInclination] = useState(DEFAULT_INCLINATION)
+  const [selectedNorad, setSelectedNorad] = useState<number | null>(null)
   const [count, setCount] = useState(1000)
+  const [size, setSize] = useState(4)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
   const [shellError, setShellError] = useState<string | null>(null)
   const [debrisOnly, setDebrisOnly] = useState(false)
@@ -246,7 +253,10 @@ export default function App() {
   const [liveKm, setLiveKm] = useState<number | null>(null)
   const [graphics] = useState<'ok' | 'missing'>(() => (webglAvailable() ? 'ok' : 'missing'))
   const altitudeRef = useRef(altitude)
+  const inclinationRef = useRef(inclination)
   const debrisOnlyRef = useRef(debrisOnly)
+  const ignoreSliderUntil = useRef(0)
+  const applyAskFocusRef = useRef<(focus: FocusOrbit | null) => void>(() => {})
   const clearPickRef = useRef<() => void>(() => {})
 
   function startViz(hood: Neighborhood) {
@@ -432,9 +442,6 @@ export default function App() {
         material.uniforms.uShellMin.value = bounds.min
         material.uniforms.uShellMax.value = bounds.max
       }
-      if (simLiveRef.current) return
-      const realRel = Math.min(Math.max(altitudeKm, 0) / 6371, 0.5)
-      controls.minDistance = 100 * (1 + realRel * ALTITUDE_EXAGGERATION) + 22
     }
     applyShellRef.current = syncShell
     debrisRef.current = (on) => {
@@ -444,10 +451,13 @@ export default function App() {
 
     let orbit: Line | null = null
     const orbitMaterial = new LineBasicMaterial({ color: ORBIT_COLOR, transparent: true, opacity: 0.9 })
-    flyRef.current = (focus) => {
+    const star = goldStarSprite()
+    globe.scene().add(star)
+    let pinOn = false
+    flyRef.current = (focus, opts = {}) => {
       if (simLiveRef.current) return
       holdSpin(FLY_MS)
-      const { positions } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
+      const { positions, marker } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
       if (orbit) {
         globe.scene().remove(orbit)
         orbit.geometry.dispose()
@@ -456,8 +466,16 @@ export default function App() {
       geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
       orbit = new Line(geometry, orbitMaterial)
       globe.scene().add(orbit)
+      star.position.set(marker[0], marker[1], marker[2])
+      pinOn = Boolean(opts.pin)
+      star.visible = pinOn
+      if (!opts.look) return
+      const pov = globe.pointOfView() as { lat?: number; lng?: number; altitude?: number }
       const lat = Math.max(-55, Math.min(55, 90 - focus.inclination_deg))
-      globe.pointOfView({ lat, lng: 20, altitude: 1.45 }, 1400)
+      globe.pointOfView(
+        { lat, lng: pov.lng ?? 20, altitude: typeof pov.altitude === 'number' ? pov.altitude : 1.65 },
+        700,
+      )
     }
 
     globe.renderer().domElement.addEventListener('webglcontextlost', (event: Event) => {
@@ -477,6 +495,7 @@ export default function App() {
       models.uniforms.uPick.value = -1
       setFact(null)
       setLiveKm(null)
+      setSelectedNorad(null)
     }
     clearPickRef.current = clearPick
 
@@ -501,9 +520,44 @@ export default function App() {
     const hideForSim = () => {
       if (cloud) cloud.visible = false
       fleet?.setVisible(false)
+      if (orbit) orbit.visible = false
+      star.visible = false
       for (const material of materials) material.uniforms.uHideOutside.value = 1
       clearPick()
     }
+
+    const selectByNorad = (norad: number) => {
+      const index = factsRef.current.findIndex((item) => item.norad === norad)
+      if (index < 0) return false
+      const next = factsRef.current[index]
+      const mean = next.meanKm
+      if (Number.isFinite(mean) && mean > 0) {
+        const shellAlt = Math.min(1950, Math.max(200, Math.round(mean / 10) * 10))
+        setAltitude(shellAlt)
+        altitudeRef.current = shellAlt
+        syncShell(shellAlt)
+      }
+      if (!zoomed) {
+        const pov = globe.pointOfView()
+        globe.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: 0.95 }, 900)
+        zoomed = true
+        showModels(true)
+        setClose(true)
+      }
+      picked = index
+      models.uniforms.uPick.value = index
+      setFact(next)
+      setSelectedNorad(norad)
+      const positions = positionsRef.current
+      if (positions) {
+        const length = Math.hypot(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2])
+        setLiveKm((length / 100 - 1) * 6371)
+      } else {
+        setLiveKm(Number.isFinite(mean) ? mean : null)
+      }
+      return true
+    }
+    selectByNoradRef.current = selectByNorad
 
     globe.onZoom((pov: { altitude: number }) => {
       if (simLiveRef.current) return
@@ -582,7 +636,9 @@ export default function App() {
         }
         const length = Math.hypot(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2])
         setLiveKm((length / 100 - 1) * 6371)
-        setFact(factsRef.current[index] ?? null)
+        const nextFact = factsRef.current[index] ?? null
+        setFact(nextFact)
+        setSelectedNorad(nextFact?.norad ?? null)
       })
     }
     const onPointerLeave = (event: PointerEvent) => {
@@ -664,6 +720,8 @@ export default function App() {
       dots.uniforms.uSize.value = POINT_SIZE
       showModels(zoomed)
       setClose(zoomed)
+      if (orbit) orbit.visible = true
+      star.visible = pinOn
       syncShell(altitudeRef.current)
       fit()
       inSimView = false
@@ -759,6 +817,7 @@ export default function App() {
       applyShellRef.current = () => {}
       debrisRef.current = () => {}
       clearPickRef.current = () => {}
+      selectByNoradRef.current = () => false
       cancelAnimationFrame(pickFrame)
       window.clearTimeout(idleTimer)
       window.clearTimeout(releaseTimer)
@@ -782,16 +841,43 @@ export default function App() {
       models.dispose()
       orbitMaterial.dispose()
       orbit?.geometry.dispose()
+      const starMaterial = star.material as SpriteMaterial
+      starMaterial.map?.dispose()
+      starMaterial.dispose()
+      star.removeFromParent()
       cloud?.geometry.dispose()
       fleet?.dispose()
       globe._destructor()
     }
   }, [graphics])
 
+  const applyUiEvent = (event: UiEvent) => {
+    if (event.type === 'focusOrbit') {
+      applyAskFocusRef.current({
+        altitude_km: event.altitude_km,
+        inclination_deg: event.inclination_deg,
+        count: event.count,
+        dims_m: event.dims_m,
+      })
+      return
+    }
+    if (event.type === 'selectObject') {
+      selectByNoradRef.current(event.norad)
+      return
+    }
+    if (event.type === 'showApproach') {
+      selectByNoradRef.current(event.norad_1)
+    }
+  }
+
   useEffect(() => {
     altitudeRef.current = altitude
     applyShellRef.current(altitude)
   }, [altitude])
+
+  useEffect(() => {
+    inclinationRef.current = inclination
+  }, [inclination])
 
   useEffect(() => {
     debrisOnlyRef.current = debrisOnly
@@ -820,6 +906,28 @@ export default function App() {
     void load()
   }, [])
 
+  useEffect(() => {
+    applyAskFocusRef.current = (focus) => {
+      if (!focus) {
+        flyRef.current({ altitude_km: altitudeRef.current, inclination_deg: inclinationRef.current })
+        return
+      }
+      const next = Math.min(1950, Math.max(200, Math.round(focus.altitude_km)))
+      ignoreSliderUntil.current = Date.now() + 500
+      setAltitude(next)
+      setAltitudeChosen(true)
+      setInclination(focus.inclination_deg)
+      if (typeof focus.count === 'number' && Number.isFinite(focus.count) && focus.count > 0) {
+        setCount(Math.round(focus.count))
+      }
+      const length = focus.dims_m?.[0]
+      if (typeof length === 'number' && Number.isFinite(length)) {
+        setSize(Math.min(20, Math.max(1, length)))
+      }
+      flyRef.current({ ...focus, altitude_km: next }, { pin: true, look: true })
+    }
+  })
+
   const overlay =
     graphics === 'missing' ? (
       <div className="status status-error">This view needs WebGL. The orbit map cannot draw without it.</div>
@@ -835,15 +943,11 @@ export default function App() {
       <aside className="hud">
         <p className="kicker">Orbit Payback</p>
         <h1>How crowded is this altitude?</h1>
-        <p className="dek">
-          {close
-            ? 'Point at a satellite. Click to visualize its neighborhood.'
-            : 'Place a constellation. Click a dot to visualize its neighborhood.'}
-        </p>
+        <p className="dek">{close ? 'Point at a satellite. Not to scale.' : 'Set a shell, or click a dot.'}</p>
         <p className="asof">
           {epoch ? (
             <>
-              Data as of <span className="num">{formatEpoch(epoch)}</span>
+              CelesTrak GP · <span className="num">{formatEpoch(epoch)}</span>
             </>
           ) : (
             'CelesTrak GP'
@@ -851,13 +955,17 @@ export default function App() {
         </p>
         <PlacePanel
           altitude={altitude}
+          altitudeChosen={altitudeChosen}
           inclination={inclination}
           count={count}
+          size={size}
           shells={shells}
           shellError={shellError}
           debrisOnly={debrisOnly}
           onAltitude={(value) => {
+            if (Date.now() < ignoreSliderUntil.current) return
             setAltitude(value)
+            setAltitudeChosen(true)
             flyRef.current({ altitude_km: value, inclination_deg: inclination })
           }}
           onInclination={(value) => {
@@ -865,9 +973,11 @@ export default function App() {
             flyRef.current({ altitude_km: altitude, inclination_deg: value })
           }}
           onCount={setCount}
+          onSize={setSize}
           onDebrisOnly={setDebrisOnly}
           onScene={(scene) => {
             setAltitude(scene.altitude)
+            setAltitudeChosen(true)
             if (scene.inclination != null) setInclination(scene.inclination)
             if (scene.count != null) setCount(scene.count)
             if (scene.debrisOnly != null) setDebrisOnly(scene.debrisOnly)
@@ -899,16 +1009,19 @@ export default function App() {
             </li>
           ))}
         </ul>
-        <p className="source">CelesTrak GP</p>
+        <p className="source">Tracked objects only, lower bound</p>
       </aside>
       {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
       <AgentPanel
-        onFocus={(focus) => {
-          const next = Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10))
-          setAltitude(next)
-          setInclination(focus.inclination_deg)
-          flyRef.current({ ...focus, altitude_km: next })
+        altitude={altitude}
+        count={count}
+        context={{
+          altitude_km: altitude,
+          inclination_deg: inclination,
+          selected_norad: selectedNorad,
         }}
+        onFocus={(focus) => applyAskFocusRef.current(focus)}
+        onUiEvent={applyUiEvent}
       />
       {viz && !sim && (
         <NeighborhoodCard

@@ -1,6 +1,9 @@
+import { CanvasTexture, Sprite, SpriteMaterial } from 'three'
+
 export const EARTH_RADIUS_KM = 6371
 export const GLOBE_RADIUS = 100
 export const ORBIT_COLOR = '#E7F27A'
+export const PLACE_STAR_COLOR = '#F5C542'
 
 const STEPS = 240
 
@@ -33,4 +36,40 @@ export function orbitLine(altitudeKm: number, inclinationDeg: number, raanDeg = 
     positions,
     marker: [positions[marker], positions[marker + 1], positions[marker + 2]] as const,
   }
+}
+
+export function goldStarSprite() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 128
+  canvas.height = 128
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return new Sprite()
+  const cx = 64
+  const cy = 64
+  const spikes = 5
+  const outer = 58
+  const inner = 24
+  ctx.beginPath()
+  for (let i = 0; i < spikes * 2; i++) {
+    const radius = i % 2 === 0 ? outer : inner
+    const angle = -Math.PI / 2 + (i * Math.PI) / spikes
+    const x = cx + Math.cos(angle) * radius
+    const y = cy + Math.sin(angle) * radius
+    if (i === 0) ctx.moveTo(x, y)
+    else ctx.lineTo(x, y)
+  }
+  ctx.closePath()
+  ctx.shadowColor = '#FFE38A'
+  ctx.shadowBlur = 20
+  ctx.fillStyle = PLACE_STAR_COLOR
+  ctx.fill()
+  const material = new SpriteMaterial({
+    map: new CanvasTexture(canvas),
+    transparent: true,
+    depthWrite: false,
+  })
+  const sprite = new Sprite(material)
+  sprite.scale.set(16, 16, 1)
+  sprite.visible = false
+  return sprite
 }

@@ -290,28 +290,87 @@ def _text_from_response(response) -> str:
     return "\n".join(chunks).strip()
 
 
+def _mission_from_args(args: Any) -> dict:
+    out: dict = {}
+    if not isinstance(args, dict):
+        return out
+    if args.get("count") is not None:
+        try:
+            count = int(args["count"])
+        except (TypeError, ValueError):
+            count = 0
+        if count > 0:
+            out["count"] = count
+    dims = args.get("dims_m")
+    if isinstance(dims, (list, tuple)) and dims:
+        try:
+            out["dims_m"] = [float(x) for x in dims]
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def _mission_from_calls(tool_calls: list) -> dict:
+    """Count/size from rank/place only when that is the first tool, not a why-style extra rank."""
+    if not tool_calls or not isinstance(tool_calls[0], dict):
+        return {}
+    first = tool_calls[0]
+    if first.get("name") in {"rank_shells", "place_satellites"}:
+        return _mission_from_args(first.get("arguments"))
+    return {}
+
+
+def _attach_mission(focus: dict | None, *missions: dict) -> dict | None:
+    if not focus:
+        return None
+    out = dict(focus)
+    for mission in missions:
+        for key, value in mission.items():
+            if key not in out and value is not None:
+                out[key] = value
+    return out
+
+
+def _fill_mission(focus: dict | None, tool_calls: list[dict]) -> dict | None:
+    """If Chalk omitted count, copy it from a rank/place call Grok made in the same turn."""
+    if not focus or focus.get("count") is not None:
+        return focus
+    for call in tool_calls:
+        if call.get("name") in {"rank_shells", "place_satellites"}:
+            return _attach_mission(focus, _mission_from_args(call.get("arguments")))
+    return focus
+
+
 def _focus_from_calls(tool_calls: list[dict]) -> dict | None:
+    chalk_focus = None
     rank_focus = None
     place_focus = None
     other = None
     for call in tool_calls:
         name, result = call["name"], call["result"]
+        args = call.get("arguments") or {}
         if name == "ask_chalk" and chalk_ok(result):
             raw = result.get("focus")
-            if isinstance(raw, dict) and raw.get("altitude_km") is not None:
-                return {
-                    "altitude_km": raw["altitude_km"],
-                    "inclination_deg": raw.get("inclination_deg", DEFAULT_INC_DEG),
-                }
             nested = result.get("tool_calls") or []
-            if isinstance(nested, list):
+            nested_mission = _mission_from_calls(nested) if isinstance(nested, list) else {}
+            raw_mission = _mission_from_args(raw)
+            if isinstance(raw, dict) and raw.get("altitude_km") is not None:
+                chalk_focus = _attach_mission(
+                    {
+                        "altitude_km": raw["altitude_km"],
+                        "inclination_deg": raw.get("inclination_deg", DEFAULT_INC_DEG),
+                    },
+                    raw_mission,
+                    nested_mission,
+                )
+            elif isinstance(nested, list):
                 found = _focus_from_calls(nested)
                 if found:
-                    return found
+                    chalk_focus = _attach_mission(found, nested_mission)
         if name == "rank_shells" and isinstance(result, list):
-            rank_focus = focus_from_rank(result) or rank_focus
+            rank_focus = _attach_mission(focus_from_rank(result), _mission_from_args(args)) or rank_focus
         elif name == "place_satellites" and isinstance(result, dict) and "alt_km" in result:
-            place_focus = focus_from_place(result)
+            place_focus = _attach_mission(focus_from_place(result), _mission_from_args(args))
         elif name == "get_shell_crowding" and isinstance(result, dict) and "alt_lo" in result and other is None:
             other = {
                 "altitude_km": (result["alt_lo"] + result["alt_hi"]) / 2,
@@ -324,7 +383,7 @@ def _focus_from_calls(tool_calls: list[dict]) -> dict | None:
                 other = {"altitude_km": alt, "inclination_deg": DEFAULT_INC_DEG}
         elif name in REMOTE_FUNCTIONS and other is None:
             other = _focus_from_remote(name, result)
-    return rank_focus or place_focus or other
+    return _fill_mission(chalk_focus or rank_focus or place_focus or other, tool_calls)
 
 
 def _focus_from_remote(name: str, result: Any) -> dict | None:
@@ -413,17 +472,188 @@ def _input_messages(system: str, question: str, history: list | None, context: d
     return messages
 
 
+def _ui_events_from_focus(focus: dict | None, tool_calls: list[dict] | None = None) -> list[dict]:
+    events: list[dict] = []
+    if isinstance(focus, dict) and focus.get("altitude_km") is not None:
+        event = {
+            "type": "focusOrbit",
+            "altitude_km": float(focus["altitude_km"]),
+            "inclination_deg": float(focus.get("inclination_deg", DEFAULT_INC_DEG)),
+        }
+        if focus.get("count") is not None:
+            event["count"] = int(focus["count"])
+        if focus.get("dims_m") is not None:
+            event["dims_m"] = focus["dims_m"]
+        events.append(event)
+    for call in tool_calls or []:
+        if call.get("name") != "get_close_approaches":
+            continue
+        result = call.get("result")
+        if not isinstance(result, dict):
+            continue
+        rows = result.get("rows") or []
+        if not rows:
+            continue
+        norad = rows[0].get("norad_1")
+        if norad is not None:
+            events.append({"type": "selectObject", "norad": int(norad)})
+        break
+    return events
+
+
 def ui_events_for(result: dict) -> list[dict]:
     focus = result.get("focus") if isinstance(result, dict) else None
-    if not isinstance(focus, dict) or focus.get("altitude_km") is None:
-        return []
-    event = {"type": "focusOrbit", "altitude_km": focus["altitude_km"]}
-    if focus.get("inclination_deg") is not None:
-        event["inclination_deg"] = focus["inclination_deg"]
-    return [event]
+    tool_calls = result.get("tool_calls") if isinstance(result, dict) else None
+    if not isinstance(tool_calls, list):
+        tool_calls = None
+    return _ui_events_from_focus(focus if isinstance(focus, dict) else None, tool_calls)
+
+
+def _pack_ask(answer: str, focus: dict | None, tool_calls: list[dict], reasoner: str) -> dict:
+    public_calls = [
+        {"name": c["name"], "arguments": c.get("arguments") or {}, "result": c.get("result")}
+        for c in tool_calls
+    ]
+    return {
+        "answer": answer,
+        "focus": focus,
+        "ui_events": _ui_events_from_focus(focus, tool_calls),
+        "tool_calls": public_calls,
+        "reasoner": reasoner,
+    }
+
+
+def _context_inc(context: dict | None) -> float:
+    if not context:
+        return DEFAULT_INC_DEG
+    value = context.get("inclination_deg")
+    try:
+        return float(value) if value is not None else DEFAULT_INC_DEG
+    except (TypeError, ValueError):
+        return DEFAULT_INC_DEG
+
+
+def _local_route(question: str, context: dict | None) -> tuple[str, list[dict]]:
+    """Route demo-style questions to local tools. Returns (answer, tool_calls)."""
+    q = question.lower()
+    inc = _context_inc(context)
+    tool_calls: list[dict] = []
+
+    def record(name: str, args: dict, result: Any) -> Any:
+        tool_calls.append({"name": name, "arguments": args, "result": result})
+        return result
+
+    if "near miss" in q or ("closest" in q and ("miss" in q or "approach" in q)):
+        result = record("get_close_approaches", {"limit": 5}, get_close_approaches(None, 5))
+        rows = result.get("rows") or []
+        if not rows:
+            return (
+                "I have no filtered SOCRATES close approaches in this snapshot. Tracked objects only, lower bound.",
+                tool_calls,
+            )
+        row = rows[0]
+        miss_m = float(row["miss_distance_km"]) * 1000
+        answer = (
+            f"Closest predicted close approach this week is {row['name_1']} and {row['name_2']}, "
+            f"about {miss_m:.0f} meters apart at {row['relative_speed_km_s']} km/s "
+            f"({row['time_utc']}). Tracked objects only, lower bound."
+        )
+        return answer, tool_calls
+
+    if "800" in q or "debris" in q or "junk" in q:
+        crowd = record("get_shell_crowding", {"alt_km": 825}, get_shell_crowding(825))
+        approaches = record(
+            "get_close_approaches",
+            {"alt_km": 825, "limit": 3},
+            get_close_approaches(825, 3),
+        )
+        total = crowd.get("total") or crowd.get("PAY", 0) + crowd.get("DEB", 0) + crowd.get("R/B", 0)
+        deb = crowd.get("DEB", 0)
+        answer = (
+            f"Around 800 to 850 km the catalog shows about {total} tracked objects, "
+            f"including about {deb} debris pieces in that shell. "
+            f"Drag is weak there, so junk stays up a long time. "
+            f"I also see {approaches.get('count', 0)} close approaches near that band. "
+            "Tracked objects only, lower bound."
+        )
+        return answer, tool_calls
+
+    if "900" in q and ("million" in q or "1m" in q or "1,000,000" in q or "1000000" in q):
+        result = record(
+            "place_satellites",
+            {"alt_km": 900, "inc_deg": inc, "dims_m": DEFAULT_DIMS_M, "count": 1_000_000},
+            place_satellites(900, inc, DEFAULT_DIMS_M, 1_000_000),
+        )
+        answer = (
+            f"Putting one million 4x2x1 m satellites at 900 km scores about {result['score']} out of 100 "
+            f"(higher is safer). Expected collisions per year (first-order model) is about "
+            f"{result['collisions_per_year']}, and a dead satellite stays up roughly "
+            f"{result['dead_sat_lifetime_years']} years. Tracked objects only, lower bound."
+        )
+        return answer, tool_calls
+
+    # Default: "where should I put N" / ranking
+    count = 1000
+    for token in ("1,000,000", "1000000", "1m", "million"):
+        if token in q.replace(" ", ""):
+            count = 1_000_000
+            break
+    else:
+        if "1000" in q.replace(",", "") or "1,000" in q:
+            count = 1000
+    rows = record(
+        "rank_shells",
+        {"dims_m": DEFAULT_DIMS_M, "count": count, "top": 5},
+        rank_shells(DEFAULT_DIMS_M, count, 5),
+    )
+    if not rows:
+        return "I could not rank shells from this catalog snapshot.", tool_calls
+    top = rows[0]
+    mid = top["alt_lo"] + (top["alt_hi"] - top["alt_lo"]) / 2
+    answer = (
+        f"For {count:,} four-meter-class satellites, the safest shell I get is about "
+        f"{top['alt_lo']:.0f} to {top['alt_hi']:.0f} km (midpoint {mid:.0f} km), "
+        f"score about {top['score']} out of 100. {top.get('reason', '')} "
+        "Tracked objects only, lower bound."
+    )
+    return answer, tool_calls
+
+
+def ask_without_grok(question: str, context: dict | None = None) -> dict:
+    """Chalk-first ask when Grok is unavailable. Local tools if Chalk is unset or errors."""
+    q = (question or "").strip()
+    if not q:
+        return _pack_ask("Ask a question about where to place satellites.", None, [], "local")
+
+    if chalk_enabled():
+        result = ask_chalk(q)
+        tool_calls = [{"name": "ask_chalk", "arguments": {"question": q}, "result": result}]
+        if chalk_ok(result) and result.get("answer"):
+            focus = None
+            raw = result.get("focus")
+            if isinstance(raw, dict) and raw.get("altitude_km") is not None:
+                focus = {
+                    "altitude_km": raw["altitude_km"],
+                    "inclination_deg": raw.get("inclination_deg", DEFAULT_INC_DEG),
+                }
+            nested = result.get("tool_calls")
+            if isinstance(nested, list):
+                tool_calls.extend(
+                    c for c in nested if isinstance(c, dict) and c.get("name")
+                )
+            return _pack_ask(str(result["answer"]), focus, tool_calls, "chalk")
+        # fall through to local
+
+    answer, tool_calls = _local_route(q, context)
+    focus = _focus_from_calls(tool_calls)
+    reasoner = "local_fallback" if chalk_enabled() else "local"
+    return _pack_ask(answer, focus, tool_calls, reasoner)
 
 
 def ask(question: str, history: list | None = None, context: dict | None = None) -> dict:
+    if not has_xai_key():
+        return ask_without_grok(question, context)
+
     client = _client()
     use_chalk = chalk_enabled()
     use_remote = remote_functions_enabled()
@@ -482,24 +712,15 @@ def ask(question: str, history: list | None = None, context: dict | None = None)
     focus = _focus_from_calls(tool_calls)
     reasoner = _reasoner(tool_calls)
     _log(f"done  reasoner {reasoner}  focus {focus}")
-    return {
-        "answer": answer,
-        "focus": focus,
-        "tool_calls": [
-            {"name": c["name"], "arguments": c["arguments"], "result": c["result"]}
-            for c in tool_calls
-        ],
-        "reasoner": reasoner,
-    }
+    return _pack_ask(answer, focus, tool_calls, reasoner)
 
 
 def run_agent(question: str, history: list | None = None, context: dict | None = None) -> dict:
-    """Eval entrypoint. Same loop as ask(). history and context are not stored.
-
-    Returns the /ask fields plus ui_events derived from focus.
-    """
+    """Eval entrypoint. Same loop as ask(). history and context are not stored."""
     result = ask(question, history=history, context=context)
-    return {**result, "ui_events": ui_events_for(result)}
+    if isinstance(result, dict) and "ui_events" not in result:
+        return {**result, "ui_events": ui_events_for(result)}
+    return result
 
 
 def speak(text: str) -> bytes:
