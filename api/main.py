@@ -1,4 +1,4 @@
-"""Orbit Payback API. uv run uvicorn api.main:app --reload --port 8000"""
+"""LVL 500 API. uv run uvicorn api.main:app --reload --port 8000"""
 from __future__ import annotations
 
 import os
@@ -35,7 +35,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Orbit Payback", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="LVL 500", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
