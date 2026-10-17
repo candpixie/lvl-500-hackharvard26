@@ -1,0 +1,277 @@
+{
+ "source": "CelesTrak SATCAT (pub/satcat.csv), objects with no decay date, Earth-centered, mean altitude=(apogee+perigee)/2",
+ "types": {
+  "PAY": "payload",
+  "DEB": "debris",
+  "R/B": "rocket body",
+  "UNK": "unknown"
+ },
+ "shells": [
+  {
+   "shell_km": 100,
+   "DEB": 0,
+   "PAY": 0,
+   "R/B": 1,
+   "UNK": 0
+  },
+  {
+   "shell_km": 150,
+   "DEB": 0,
+   "PAY": 2,
+   "R/B": 0,
+   "UNK": 0
+  },
+  {
+   "shell_km": 200,
+   "DEB": 1,
+   "PAY": 22,
+   "R/B": 0,
+   "UNK": 0
+  },
+  {
+   "shell_km": 250,
+   "DEB": 3,
+   "PAY": 73,
+   "R/B": 2,
+   "UNK": 1
+  },
+  {
+   "shell_km": 300,
+   "DEB": 4,
+   "PAY": 253,
+   "R/B": 9,
+   "UNK": 0
+  },
+  {
+   "shell_km": 350,
+   "DEB": 15,
+   "PAY": 918,
+   "R/B": 16,
+   "UNK": 3
+  },
+  {
+   "shell_km": 400,
+   "DEB": 34,
+   "PAY": 387,
+   "R/B": 27,
+   "UNK": 3
+  },
+  {
+   "shell_km": 450,
+   "DEB": 66,
+   "PAY": 10246,
+   "R/B": 33,
+   "UNK": 17
+  },
+  {
+   "shell_km": 500,
+   "DEB": 117,
+   "PAY": 972,
+   "R/B": 33,
+   "UNK": 5
+  },
+  {
+   "shell_km": 550,
+   "DEB": 217,
+   "PAY": 1042,
+   "R/B": 51,
+   "UNK": 6
+  },
+  {
+   "shell_km": 600,
+   "DEB": 388,
+   "PAY": 696,
+   "R/B": 79,
+   "UNK": 3
+  },
+  {
+   "shell_km": 650,
+   "DEB": 639,
+   "PAY": 197,
+   "R/B": 38,
+   "UNK": 0
+  },
+  {
+   "shell_km": 700,
+   "DEB": 912,
+   "PAY": 105,
+   "R/B": 55,
+   "UNK": 2
+  },
+  {
+   "shell_km": 750,
+   "DEB": 1250,
+   "PAY": 320,
+   "R/B": 100,
+   "UNK": 3
+  },
+  {
+   "shell_km": 800,
+   "DEB": 1366,
+   "PAY": 159,
+   "R/B": 65,
+   "UNK": 0
+  },
+  {
+   "shell_km": 850,
+   "DEB": 1161,
+   "PAY": 114,
+   "R/B": 53,
+   "UNK": 0
+  },
+  {
+   "shell_km": 900,
+   "DEB": 693,
+   "PAY": 210,
+   "R/B": 34,
+   "UNK": 2
+  },
+  {
+   "shell_km": 950,
+   "DEB": 568,
+   "PAY": 277,
+   "R/B": 176,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1000,
+   "DEB": 380,
+   "PAY": 34,
+   "R/B": 25,
+   "UNK": 1
+  },
+  {
+   "shell_km": 1050,
+   "DEB": 275,
+   "PAY": 275,
+   "R/B": 28,
+   "UNK": 3
+  },
+  {
+   "shell_km": 1100,
+   "DEB": 240,
+   "PAY": 188,
+   "R/B": 16,
+   "UNK": 1
+  },
+  {
+   "shell_km": 1150,
+   "DEB": 157,
+   "PAY": 401,
+   "R/B": 19,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1200,
+   "DEB": 126,
+   "PAY": 346,
+   "R/B": 6,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1250,
+   "DEB": 298,
+   "PAY": 7,
+   "R/B": 3,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1300,
+   "DEB": 118,
+   "PAY": 16,
+   "R/B": 15,
+   "UNK": 1
+  },
+  {
+   "shell_km": 1350,
+   "DEB": 121,
+   "PAY": 34,
+   "R/B": 12,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1400,
+   "DEB": 139,
+   "PAY": 289,
+   "R/B": 28,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1450,
+   "DEB": 207,
+   "PAY": 277,
+   "R/B": 20,
+   "UNK": 1
+  },
+  {
+   "shell_km": 1500,
+   "DEB": 195,
+   "PAY": 53,
+   "R/B": 20,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1550,
+   "DEB": 159,
+   "PAY": 21,
+   "R/B": 45,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1600,
+   "DEB": 97,
+   "PAY": 13,
+   "R/B": 3,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1650,
+   "DEB": 66,
+   "PAY": 13,
+   "R/B": 6,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1700,
+   "DEB": 39,
+   "PAY": 7,
+   "R/B": 2,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1750,
+   "DEB": 33,
+   "PAY": 4,
+   "R/B": 1,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1800,
+   "DEB": 20,
+   "PAY": 2,
+   "R/B": 0,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1850,
+   "DEB": 16,
+   "PAY": 4,
+   "R/B": 0,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1900,
+   "DEB": 16,
+   "PAY": 1,
+   "R/B": 3,
+   "UNK": 0
+  },
+  {
+   "shell_km": 1950,
+   "DEB": 17,
+   "PAY": 4,
+   "R/B": 0,
+   "UNK": 0
+  }
+ ]
+}
