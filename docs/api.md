@@ -1,6 +1,6 @@
 # Deployed Chalk functions: reference
 
-**Status (Sat Oct 17, afternoon):** the team's API already exists: `api/` (FastAPI, port 8000) with `/ask`, `/listen`, `/imagine`, `/speak`, `/health`, the Grok loop in `api/agent.py` (`from agent import run_agent`), and the Chalk client in `api/chalk.py`. Their contract for a Chalk-hosted `/ask` endpoint is `docs/chalk-contract.md` and `docs/chalk-teammates.md`. An earlier draft of this file proposed a different `/api/ask` server on port 8787 with a mock; that is withdrawn. This file now only documents the four functions deployed to Chalk environment `spcwce09a241`, which `api/chalk.py` can call with `CHALK_REMOTE_FUNCTIONS=1`.
+The team's API is `api/` (FastAPI, port 8000) with `/ask`, `/listen`, `/imagine`, `/speak` and `/health`, the Grok loop in `api/agent.py` and the Chalk client in `api/chalk.py`. The Chalk-hosted ask service is documented in `docs/chalk-ask-service.md`. This file documents the four functions deployed to Chalk, which `api/chalk.py` can call with `CHALK_REMOTE_FUNCTIONS=1`.
 
 ## Calling them from Python
 ```python

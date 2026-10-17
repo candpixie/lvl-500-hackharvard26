@@ -1,6 +1,6 @@
 """Flask wrapper that serves ask_core on a Chalk scaling group.  POST /ask {question} -> {answer, focus, tool_calls, note}.
 
-Contract: docs/chalk-contract.md. A question these resolvers cannot answer returns HTTP 422 with {"error": ...}, which
+Contract: docs/chalk-ask-service.md. A question these resolvers cannot answer returns HTTP 422 with {"error": ...}, which
 makes the team's Grok client fall back to its local tools. GET /health reports the data snapshot. GET /ask is 405,
 which the client's health probe counts as up.
 Local:   uv run --with flask python chalk_tools/ask_app.py     (port 8080, or PORT)

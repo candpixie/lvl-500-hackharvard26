@@ -1,4 +1,4 @@
-"""The Chalk reasoner behind POST $CHALK_ASK_URL (docs/chalk-contract.md). No Flask, no Chalk imports here.
+"""The Chalk reasoner behind POST $CHALK_ASK_URL (docs/chalk-ask-service.md). No Flask, no Chalk imports here.
 
 Takes the user's question, decides which of the team's resolvers answers it, runs them, and returns
 {answer, focus, tool_calls, note}. The resolvers are the team's own pipeline/orbit_data.py and
