@@ -5,7 +5,9 @@ __pycache__/
 node_modules/
 .env
 .env.*
+!.env.example
 .DS_Store
 data/out/objects.json
 data/out/tools/
 .pytest_cache/
+.gstack/

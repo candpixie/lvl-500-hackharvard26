@@ -3,15 +3,52 @@ import Globe from 'globe.gl'
 import {
   BufferGeometry,
   Float32BufferAttribute,
+  Line,
+  LineBasicMaterial,
   Points,
   ShaderMaterial,
+  Vector3,
   type MeshPhongMaterial,
 } from 'three'
+import '@fontsource/ibm-plex-sans/400.css'
+import '@fontsource/ibm-plex-sans/500.css'
 import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
-import type { OrbitCounts, WorkerOut } from './orbit.ts'
+import AgentPanel from './AgentPanel.tsx'
+import type { FocusOrbit, Neighborhood } from './events.ts'
+import { imagineGrok, neighborhoodPrompt } from './events.ts'
+import { createFleet, type Fleet } from './fleet.ts'
+import NeighborhoodCard from './NeighborhoodCard.tsx'
+import ObjectCard from './ObjectCard.tsx'
+import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
+import { orbitLine, ORBIT_COLOR } from './place.ts'
+import {
+  exaggeratePoint,
+  neighborhoodAround,
+  neighborhoodInShell,
+  pickNearest,
+  screenNearest,
+} from './pick.ts'
 import { shellBounds, type ShellRow } from './shells.ts'
+import { createSimActors, simCameraRig } from './simCraft.ts'
+import SimOverlay from './SimOverlay.tsx'
+
+interface CatalogPick {
+  positions: Float32Array
+  names: string[]
+  types: string[]
+  altitudes: Float32Array
+}
+
+function catalogFrom(positions: Float32Array, facts: ObjectFact[], altitudes: Float32Array): CatalogPick {
+  return {
+    positions,
+    names: facts.map((fact) => fact.name),
+    types: facts.map((fact) => fact.type),
+    altitudes,
+  }
+}
 
 const LEGEND: { key: keyof OrbitCounts; label: string; color: string }[] = [
   { key: 'satellite', label: 'satellite', color: '#C9D6E3' },
@@ -23,8 +60,44 @@ const LEGEND: { key: keyof OrbitCounts; label: string; color: string }[] = [
 const ZOOM_HIDE_ALTITUDE = 1.15
 const START_ALTITUDE = 480
 const ALTITUDE_EXAGGERATION = 5.5
+const POINT_SIZE = 2.1
 
 type Status = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready' }
+
+const craftVertex = `
+  attribute float aAlt;
+  attribute float aKind;
+  attribute float aId;
+  uniform float uShellMin;
+  uniform float uShellMax;
+  uniform float uDim;
+  uniform float uHideOutside;
+  uniform float uDebrisOnly;
+  uniform float uPick;
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    float inside = step(uShellMin, aAlt) * step(aAlt, uShellMax);
+    float debris = step(0.5, aKind);
+    float picked = step(abs(aId - uPick), 0.5);
+    vec3 shaped = position * mix(1.0, 1.65, picked);
+    vec4 placed = instanceMatrix * vec4(shaped, 1.0);
+    vec3 lit = normalize(mat3(instanceMatrix) * normal);
+    vec3 key = normalize(vec3(0.32, 0.78, 0.42));
+    vec3 fill = normalize(vec3(-0.55, 0.15, -0.35));
+    float shade = 0.78 + 0.22 * max(dot(lit, key), 0.0) + 0.16 * max(dot(lit, fill), 0.0);
+    if (debris > 0.5) vAlpha = mix(uDebrisOnly > 0.5 ? 0.1 : 0.78, 1.0, inside);
+    else vAlpha = mix(uDim, 1.0, inside);
+    if (uHideOutside > 0.5) vAlpha *= inside;
+    if (uDebrisOnly > 0.5) vAlpha *= debris;
+    vAlpha = max(vAlpha, picked);
+    vec3 base = color * instanceColor;
+    if (debris > 0.5) base = vec3(0.949, 0.647, 0.255);
+    else base *= shade;
+    vColor = base * mix(1.0, 1.25, picked);
+    gl_Position = projectionMatrix * modelViewMatrix * placed;
+  }
+`
 
 const pointVertex = `
   attribute float aAlt;
@@ -45,14 +118,13 @@ const pointVertex = `
     vec3 placed = normalize(position) * 100.0 * (1.0 + capped * uExaggerate);
     float inside = step(uShellMin, aAlt) * step(aAlt, uShellMax);
     float debris = step(0.5, aKind);
-    vColor = color;
-    if (debris > 0.5) vAlpha = mix(uDebrisOnly > 0.5 ? 0.1 : 0.78, 1.0, inside);
+    vColor = mix(color, vec3(0.949, 0.647, 0.255), debris);
+    if (debris > 0.5) vAlpha = mix(0.55, 1.0, inside);
     else vAlpha = mix(uDim, 1.0, inside);
     if (uHideOutside > 0.5) vAlpha *= inside;
     if (uDebrisOnly > 0.5) vAlpha *= debris;
     vec4 mv = modelViewMatrix * vec4(placed, 1.0);
-    float outsideScale = uDebrisOnly > 0.5 ? 0.35 : 0.72;
-    float boost = mix(1.0, 2.7, debris) * mix(outsideScale, 2.0, inside);
+    float boost = mix(1.0, 2.2, debris) * mix(0.45, 1.65, inside);
     gl_PointSize = uSize * boost * (uScale / -mv.z);
     gl_Position = projectionMatrix * mv;
   }
@@ -62,12 +134,19 @@ const pointFragment = `
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
-    if (vAlpha < 0.01) discard;
+    if (vAlpha < 0.03) discard;
     vec2 centered = gl_PointCoord - vec2(0.5);
-    float dist = dot(centered, centered);
-    if (dist > 0.25) discard;
-    float edge = smoothstep(0.25, 0.02, dist);
-    gl_FragColor = vec4(vColor, vAlpha * edge);
+    if (dot(centered, centered) > 0.25) discard;
+    gl_FragColor = vec4(vColor, vAlpha);
+  }
+`
+
+const craftFragment = `
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    if (vAlpha < 0.25) discard;
+    gl_FragColor = vec4(vColor, 1.0);
   }
 `
 
@@ -90,17 +169,23 @@ function webglAvailable() {
   }
 }
 
-function shellMaterial(altitudeKm: number) {
+function shellUniforms(altitudeKm: number) {
   const bounds = shellBounds(altitudeKm)
+  return {
+    uShellMin: { value: bounds.min },
+    uShellMax: { value: bounds.max },
+    uDim: { value: 0.07 },
+    uHideOutside: { value: 0 },
+    uDebrisOnly: { value: 0 },
+  }
+}
+
+function pointMaterial(altitudeKm: number) {
   return new ShaderMaterial({
     uniforms: {
-      uShellMin: { value: bounds.min },
-      uShellMax: { value: bounds.max },
-      uDim: { value: 0.04 },
-      uHideOutside: { value: 0 },
-      uDebrisOnly: { value: 0 },
+      ...shellUniforms(altitudeKm),
       uExaggerate: { value: ALTITUDE_EXAGGERATION },
-      uSize: { value: 2.2 },
+      uSize: { value: POINT_SIZE },
       uScale: { value: 400 },
     },
     vertexShader: pointVertex,
@@ -111,17 +196,115 @@ function shellMaterial(altitudeKm: number) {
   })
 }
 
+function fleetMaterial(altitudeKm: number) {
+  return new ShaderMaterial({
+    uniforms: {
+      ...shellUniforms(altitudeKm),
+      uPick: { value: -1 },
+    },
+    vertexShader: craftVertex,
+    fragmentShader: craftFragment,
+    vertexColors: true,
+  })
+}
+
 export default function App() {
   const hostRef = useRef<HTMLDivElement>(null)
   const applyShellRef = useRef<(altitudeKm: number) => void>(() => {})
   const debrisRef = useRef<(on: boolean) => void>(() => {})
+  const flyRef = useRef<(focus: FocusOrbit) => void>(() => {})
+  const catalogRef = useRef<CatalogPick | null>(null)
+  const vizGen = useRef(0)
+  const startVizRef = useRef<(hood: Neighborhood) => void>(() => {})
+  const enterSimRef = useRef<(index: number) => void>(() => {})
+  const exitSimRef = useRef<() => void>(() => {})
+  const simLiveRef = useRef(false)
   const [status, setStatus] = useState<Status>({ state: 'loading' })
+  const [viz, setViz] = useState<{
+    hood: Neighborhood
+    status: 'loading' | 'ready' | 'error'
+    image: { src: string; label: string } | null
+  } | null>(null)
+  const [sim, setSim] = useState<{
+    phase: 'still' | 'live'
+    hood: Neighborhood
+    image: { src: string; label: string } | null
+  } | null>(null)
   const [altitude, setAltitude] = useState(START_ALTITUDE)
+  const [inclination, setInclination] = useState(53)
+  const [count, setCount] = useState(1000)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
   const [shellError, setShellError] = useState<string | null>(null)
   const [debrisOnly, setDebrisOnly] = useState(false)
   const [epoch, setEpoch] = useState('')
+  const [close, setClose] = useState(false)
+  const [fact, setFact] = useState<ObjectFact | null>(null)
+  const [liveKm, setLiveKm] = useState<number | null>(null)
   const [graphics] = useState<'ok' | 'missing'>(() => (webglAvailable() ? 'ok' : 'missing'))
+  const altitudeRef = useRef(altitude)
+  const debrisOnlyRef = useRef(debrisOnly)
+  const clearPickRef = useRef<() => void>(() => {})
+
+  function startViz(hood: Neighborhood) {
+    const id = ++vizGen.current
+    setViz({ hood, status: 'loading', image: null })
+    void imagineGrok(neighborhoodPrompt(hood))
+      .then((art) => {
+        if (id !== vizGen.current) return
+        const src = art.url ?? (art.b64_json ? `data:image/png;base64,${art.b64_json}` : '')
+        setViz({ hood, status: src ? 'ready' : 'error', image: src ? { src, label: art.label } : null })
+      })
+      .catch(() => {
+        if (id !== vizGen.current) return
+        setViz({ hood, status: 'error', image: null })
+      })
+  }
+
+  function openSim() {
+    if (!viz) return
+    if (viz.image) {
+      setSim({ phase: 'still', hood: viz.hood, image: viz.image })
+      return
+    }
+    simLiveRef.current = true
+    setSim({ phase: 'live', hood: viz.hood, image: null })
+    enterSimRef.current(viz.hood.pickedIndex)
+  }
+
+  function startLiveSim() {
+    if (!sim) return
+    simLiveRef.current = true
+    setSim({ ...sim, phase: 'live' })
+    setAltitude(Math.round(sim.hood.picked.alt_km / 10) * 10)
+    enterSimRef.current(sim.hood.pickedIndex)
+  }
+
+  function leaveSim() {
+    simLiveRef.current = false
+    exitSimRef.current()
+    setSim(null)
+  }
+
+  useEffect(() => {
+    startVizRef.current = startViz
+  })
+
+  useEffect(() => {
+    document.body.classList.toggle('is-sim', Boolean(sim))
+    return () => document.body.classList.remove('is-sim')
+  }, [sim])
+
+  useEffect(() => {
+    if (sim?.phase !== 'live') return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      simLiveRef.current = false
+      exitSimRef.current()
+      setSim(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sim?.phase])
 
   useEffect(() => {
     const host = hostRef.current
@@ -130,7 +313,7 @@ export default function App() {
     const globe = (() => {
       try {
         return new Globe(host, {
-          rendererConfig: { antialias: true, alpha: false, failIfMajorPerformanceCaveat: false },
+          rendererConfig: { antialias: true, alpha: false, preserveDrawingBuffer: true, failIfMajorPerformanceCaveat: false },
         })
       } catch {
         return null
@@ -173,28 +356,62 @@ export default function App() {
     controls.dampingFactor = 0.08
     controls.rotateSpeed = 0.45
     controls.zoomSpeed = 0.7
-    controls.minDistance = 120
+    controls.minDistance = 160
     controls.maxDistance = 2200
 
-    const material = shellMaterial(START_ALTITUDE)
+    const dots = pointMaterial(START_ALTITUDE)
+    const models = fleetMaterial(START_ALTITUDE)
+    const materials = [dots, models]
     const fit = () => {
-      const width = window.innerWidth
+      const width = Math.max(1, Math.round(host.clientWidth || document.documentElement.clientWidth || window.innerWidth))
+      const height = Math.max(
+        1,
+        Math.round(host.clientHeight || document.documentElement.clientHeight || window.innerHeight),
+      )
       const column = Math.min(320, width * 0.42)
       globe.width(width)
-      globe.height(window.innerHeight)
-      globe.globeOffset([Math.round(column * 0.42), 0])
-      material.uniforms.uScale.value = globe.renderer().domElement.height * 0.5
+      globe.height(height)
+      if (!simLiveRef.current) globe.globeOffset([Math.round(column * 0.42), 0])
+      dots.uniforms.uScale.value = height * 0.5
     }
     fit()
+    const refit = requestAnimationFrame(fit)
+    const resizeObserver = new ResizeObserver(fit)
+    resizeObserver.observe(host)
     window.addEventListener('resize', fit)
+    window.visualViewport?.addEventListener('resize', fit)
 
-    applyShellRef.current = (altitudeKm) => {
+    const syncShell = (altitudeKm: number) => {
       const bounds = shellBounds(altitudeKm)
-      material.uniforms.uShellMin.value = bounds.min
-      material.uniforms.uShellMax.value = bounds.max
+      for (const material of materials) {
+        material.uniforms.uShellMin.value = bounds.min
+        material.uniforms.uShellMax.value = bounds.max
+      }
+      if (simLiveRef.current) return
+      const realRel = Math.min(Math.max(altitudeKm, 0) / 6371, 0.5)
+      controls.minDistance = 100 * (1 + realRel * ALTITUDE_EXAGGERATION) + 22
     }
+    applyShellRef.current = syncShell
     debrisRef.current = (on) => {
-      material.uniforms.uDebrisOnly.value = on ? 1 : 0
+      const value = on ? 1 : 0
+      for (const material of materials) material.uniforms.uDebrisOnly.value = value
+    }
+
+    let orbit: Line | null = null
+    const orbitMaterial = new LineBasicMaterial({ color: ORBIT_COLOR, transparent: true, opacity: 0.9 })
+    flyRef.current = (focus) => {
+      if (simLiveRef.current) return
+      const { positions } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
+      if (orbit) {
+        globe.scene().remove(orbit)
+        orbit.geometry.dispose()
+      }
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+      orbit = new Line(geometry, orbitMaterial)
+      globe.scene().add(orbit)
+      const lat = Math.max(-55, Math.min(55, 90 - focus.inclination_deg))
+      globe.pointOfView({ lat, lng: 20, altitude: 1.45 }, 1400)
     }
 
     globe.renderer().domElement.addEventListener('webglcontextlost', (event: Event) => {
@@ -202,11 +419,174 @@ export default function App() {
       setStatus({ state: 'error', message: 'WebGL stopped. The orbit map cannot draw without it.' })
     })
 
+    const positionsRef = { current: null as Float32Array | null }
+    const altitudesRef = { current: null as Float32Array | null }
+    const kindsRef = { current: null as Float32Array | null }
+    const factsRef = { current: [] as ObjectFact[] }
+    let picked = -1
+    let zoomed = false
+
+    const clearPick = () => {
+      picked = -1
+      models.uniforms.uPick.value = -1
+      setFact(null)
+      setLiveKm(null)
+    }
+    clearPickRef.current = clearPick
+
+    let fleet: Fleet | null = null
+    let cloud: Points | null = null
+    let simActors: ReturnType<typeof createSimActors> | null = null
+    let simIndex = -1
+    const simTarget = new Vector3()
+    const nativeUpdate = controls.update.bind(controls)
+    controls.update = () => {
+      if (simLiveRef.current) controls.target.copy(simTarget)
+      return nativeUpdate()
+    }
+
+    const showModels = (on: boolean) => {
+      if (cloud) cloud.visible = !on
+      fleet?.setVisible(on)
+      for (const material of materials) material.uniforms.uHideOutside.value = on ? 1 : 0
+      if (on && positionsRef.current) fleet?.update(positionsRef.current)
+    }
+
+    const hideForSim = () => {
+      if (cloud) cloud.visible = false
+      fleet?.setVisible(false)
+      for (const material of materials) material.uniforms.uHideOutside.value = 1
+      clearPick()
+    }
+
     globe.onZoom((pov: { altitude: number }) => {
-      material.uniforms.uHideOutside.value = pov.altitude < ZOOM_HIDE_ALTITUDE ? 1 : 0
+      if (simLiveRef.current) return
+      const next = pov.altitude < ZOOM_HIDE_ALTITUDE
+      if (next === zoomed) return
+      zoomed = next
+      showModels(next)
+      setClose(next)
+      if (!next) clearPick()
     })
 
-    let cloud: Points | null = null
+    const canvas = globe.renderer().domElement
+    let pickFrame = 0
+    const onPointerMove = (event: PointerEvent) => {
+      if (simLiveRef.current || !zoomed) return
+      const rect = canvas.getBoundingClientRect()
+      const x = event.clientX - rect.left
+      const y = event.clientY - rect.top
+      cancelAnimationFrame(pickFrame)
+      pickFrame = requestAnimationFrame(() => {
+        const positions = positionsRef.current
+        const pointAltitudes = altitudesRef.current
+        const kinds = kindsRef.current
+        if (!positions || !pointAltitudes || !kinds) return
+        const index = screenNearest({
+          positions,
+          altitudes: pointAltitudes,
+          kinds,
+          camera: globe.camera(),
+          width: rect.width,
+          height: rect.height,
+          x,
+          y,
+          altitudeKm: altitudeRef.current,
+          debrisOnly: debrisOnlyRef.current,
+          radiusPx: 28,
+        })
+        const next = index ?? -1
+        if (next === picked) return
+        picked = next
+        models.uniforms.uPick.value = picked
+        if (index == null) {
+          setFact(null)
+          setLiveKm(null)
+          return
+        }
+        const length = Math.hypot(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2])
+        setLiveKm((length / 100 - 1) * 6371)
+        setFact(factsRef.current[index] ?? null)
+      })
+    }
+    const onPointerLeave = () => {
+      cancelAnimationFrame(pickFrame)
+      if (picked >= 0) clearPick()
+    }
+    canvas.addEventListener('pointermove', onPointerMove)
+    canvas.addEventListener('pointerleave', onPointerLeave)
+
+    const lockSimTarget = (positions: Float32Array, index: number) => {
+      const [x, y, z] = exaggeratePoint(
+        positions[index * 3],
+        positions[index * 3 + 1],
+        positions[index * 3 + 2],
+        ALTITUDE_EXAGGERATION,
+      )
+      simTarget.set(x, y, z)
+    }
+
+    enterSimRef.current = (index: number) => {
+      const catalog = catalogRef.current
+      if (!catalog || index < 0) return
+      simActors?.dispose()
+      const spatial = neighborhoodAround(
+        index,
+        catalog.positions,
+        catalog.names,
+        catalog.types,
+        catalog.altitudes,
+        16,
+      )
+      simActors = createSimActors(
+        [index, ...spatial.nearbyIndices],
+        catalog.names,
+        catalog.types,
+        catalog.positions,
+        ALTITUDE_EXAGGERATION,
+      )
+      globe.scene().add(simActors.root)
+      simIndex = index
+      lockSimTarget(catalog.positions, index)
+      const { eye } = simCameraRig(simTarget.x, simTarget.y, simTarget.z)
+      globe.globeOffset([0, 0])
+      controls.minDistance = 12
+      controls.maxDistance = 80
+      controls.rotateSpeed = 0.85
+      controls.enablePan = true
+      dots.uniforms.uSize.value = 5
+      hideForSim()
+      const cam = globe.camera()
+      const start = cam.position.clone()
+      const startTarget = controls.target.clone()
+      const began = performance.now()
+      const step = () => {
+        const u = Math.min(1, (performance.now() - began) / 1200)
+        const ease = 1 - (1 - u) ** 3
+        cam.position.lerpVectors(start, eye, ease)
+        controls.target.lerpVectors(startTarget, simTarget, ease)
+        cam.lookAt(controls.target)
+        controls.update()
+        if (u < 1) requestAnimationFrame(step)
+      }
+      requestAnimationFrame(step)
+    }
+
+    exitSimRef.current = () => {
+      simActors?.dispose()
+      simActors = null
+      simIndex = -1
+      controls.maxDistance = 2200
+      controls.rotateSpeed = 0.45
+      controls.target.set(0, 0, 0)
+      dots.uniforms.uSize.value = POINT_SIZE
+      showModels(zoomed)
+      setClose(zoomed)
+      syncShell(altitudeRef.current)
+      fit()
+      globe.pointOfView({ lat: 18, lng: 12, altitude: 1.65 }, 900)
+    }
+
     const worker = new Worker(new URL('./propagate.worker.ts', import.meta.url), { type: 'module' })
 
     worker.onerror = () => {
@@ -220,45 +600,122 @@ export default function App() {
         return
       }
       if (message.kind === 'ready') {
+        positionsRef.current = message.positions
+        altitudesRef.current = message.altitudes
+        kindsRef.current = message.kinds
+        factsRef.current = message.facts
         const geometry = new BufferGeometry()
         geometry.setAttribute('position', new Float32BufferAttribute(message.positions, 3))
         geometry.setAttribute('color', new Float32BufferAttribute(message.colors, 3))
         geometry.setAttribute('aAlt', new Float32BufferAttribute(message.altitudes, 1))
         geometry.setAttribute('aKind', new Float32BufferAttribute(message.kinds, 1))
-        setEpoch(message.epoch)
-        const points = new Points(geometry, material)
+        const points = new Points(geometry, dots)
         points.frustumCulled = false
         globe.scene().add(points)
         cloud = points
+        fleet = createFleet(message.facts, message.altitudes, message.kinds, models, (mesh) => {
+          globe.scene().add(mesh)
+        })
+        const live = geometry.getAttribute('position').array as Float32Array
+        positionsRef.current = live
+        catalogRef.current = catalogFrom(live, message.facts, message.altitudes)
+        setEpoch(message.epoch)
         setStatus({ state: 'ready' })
         return
       }
-      if (!cloud) return
-      const attribute = cloud.geometry.getAttribute('position')
-      const array = attribute.array as Float32Array
-      if (message.positions.length !== array.length) return
+      if (!cloud || !fleet || message.positions.length !== factsRef.current.length * 3) return
+      const positions = cloud.geometry.getAttribute('position')
+      const array = positions.array as Float32Array
       array.set(message.positions)
-      attribute.needsUpdate = true
+      positions.needsUpdate = true
+      positionsRef.current = array
+      if (zoomed && !simLiveRef.current) fleet.update(array)
+      simActors?.update(array)
+      if (simLiveRef.current && simIndex >= 0) lockSimTarget(array, simIndex)
+      if (picked >= 0) {
+        const length = Math.hypot(
+          message.positions[picked * 3],
+          message.positions[picked * 3 + 1],
+          message.positions[picked * 3 + 2],
+        )
+        setLiveKm((length / 100 - 1) * 6371)
+      }
     }
+
+    let downX = 0
+    let downY = 0
+    const origin = new Vector3()
+    const dir = new Vector3()
+    const onDown = (event: PointerEvent) => {
+      downX = event.clientX
+      downY = event.clientY
+    }
+    const onUp = (event: PointerEvent) => {
+      if (simLiveRef.current) return
+      if (Math.hypot(event.clientX - downX, event.clientY - downY) > 5) return
+      const catalog = catalogRef.current
+      if (!catalog) return
+      const cam = globe.camera()
+      cam.updateMatrixWorld()
+      const rect = canvas.getBoundingClientRect()
+      const ndcX = ((event.clientX - rect.left) / rect.width) * 2 - 1
+      const ndcY = -((event.clientY - rect.top) / rect.height) * 2 + 1
+      origin.setFromMatrixPosition(cam.matrixWorld)
+      dir.set(ndcX, ndcY, 0.5).unproject(cam).sub(origin).normalize()
+      const index = pickNearest(catalog.positions, origin, dir, catalog.names.length, ALTITUDE_EXAGGERATION)
+      if (index < 0) return
+      startVizRef.current(neighborhoodAround(index, catalog.positions, catalog.names, catalog.types, catalog.altitudes))
+    }
+    canvas.addEventListener('pointerdown', onDown)
+    canvas.addEventListener('pointerup', onUp)
 
     return () => {
       applyShellRef.current = () => {}
       debrisRef.current = () => {}
+      clearPickRef.current = () => {}
+      cancelAnimationFrame(pickFrame)
+      canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointerleave', onPointerLeave)
+      canvas.removeEventListener('pointerdown', onDown)
+      canvas.removeEventListener('pointerup', onUp)
+      cancelAnimationFrame(refit)
+      resizeObserver.disconnect()
+      flyRef.current = () => {}
+      enterSimRef.current = () => {}
+      exitSimRef.current = () => {}
+      controls.update = nativeUpdate
+      simActors?.dispose()
+      catalogRef.current = null
       window.removeEventListener('resize', fit)
+      window.visualViewport?.removeEventListener('resize', fit)
       worker.terminate()
-      material.dispose()
+      dots.dispose()
+      models.dispose()
+      orbitMaterial.dispose()
+      orbit?.geometry.dispose()
       cloud?.geometry.dispose()
+      fleet?.dispose()
       globe._destructor()
     }
   }, [graphics])
 
   useEffect(() => {
+    altitudeRef.current = altitude
     applyShellRef.current(altitude)
   }, [altitude])
 
   useEffect(() => {
+    debrisOnlyRef.current = debrisOnly
     debrisRef.current(debrisOnly)
   }, [debrisOnly])
+
+  useEffect(() => {
+    if (!fact || !close) return
+    const bounds = shellBounds(altitude)
+    const hiddenByShell = fact.meanKm < bounds.min || fact.meanKm > bounds.max
+    const hiddenByDebris = debrisOnly && fact.type !== 'debris'
+    if (hiddenByShell || hiddenByDebris) clearPickRef.current()
+  }, [altitude, debrisOnly, close, fact])
 
   useEffect(() => {
     const load = async () => {
@@ -287,17 +744,52 @@ export default function App() {
     <>
       <div ref={hostRef} className="viewport" />
       <aside className="hud">
-        <p className="kicker">Orbit crowding</p>
+        <p className="kicker">Orbit Payback</p>
         <h1>How crowded is this altitude?</h1>
-        <p className="dek">That shell stays bright.</p>
+        <p className="dek">
+          {close
+            ? 'Point at a satellite. Click to visualize its neighborhood.'
+            : 'Place a constellation. Click a dot to visualize its neighborhood.'}
+        </p>
+        {close && <p className="scale-note">Enlarged, not to scale</p>}
         <p className="asof">{epoch ? `Data as of ${formatEpoch(epoch)}` : 'CelesTrak GP'}</p>
         <PlacePanel
           altitude={altitude}
+          inclination={inclination}
+          count={count}
           shells={shells}
           shellError={shellError}
           debrisOnly={debrisOnly}
-          onAltitude={setAltitude}
+          onAltitude={(value) => {
+            setAltitude(value)
+            flyRef.current({ altitude_km: value, inclination_deg: inclination })
+          }}
+          onInclination={(value) => {
+            setInclination(value)
+            flyRef.current({ altitude_km: altitude, inclination_deg: value })
+          }}
+          onCount={setCount}
           onDebrisOnly={setDebrisOnly}
+          onScene={(scene) => {
+            setAltitude(scene.altitude)
+            if (scene.count != null) setCount(scene.count)
+            if (scene.debrisOnly != null) setDebrisOnly(scene.debrisOnly)
+            flyRef.current({ altitude_km: scene.altitude, inclination_deg: inclination })
+          }}
+          onVisualizeShell={() => {
+            const catalog = catalogRef.current
+            if (!catalog) return
+            const bounds = shellBounds(altitude)
+            const hood = neighborhoodInShell(
+              bounds.min,
+              bounds.max,
+              catalog.names,
+              catalog.types,
+              catalog.altitudes,
+              debrisOnly,
+            )
+            if (hood) startViz(hood)
+          }}
         />
         <ul className="legend">
           {LEGEND.map((item) => (
@@ -309,6 +801,36 @@ export default function App() {
         </ul>
         <p className="source">CelesTrak GP</p>
       </aside>
+      {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
+      <AgentPanel
+        onFocus={(focus) => {
+          const next = Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10))
+          setAltitude(next)
+          setInclination(focus.inclination_deg)
+          flyRef.current({ ...focus, altitude_km: next })
+        }}
+      />
+      {viz && !sim && (
+        <NeighborhoodCard
+          hood={viz.hood}
+          status={viz.status}
+          image={viz.image}
+          onClose={() => {
+            vizGen.current += 1
+            setViz(null)
+          }}
+          onEnterSim={openSim}
+        />
+      )}
+      {sim && (
+        <SimOverlay
+          hood={sim.hood}
+          image={sim.image}
+          phase={sim.phase}
+          onEnterLive={startLiveSim}
+          onExit={leaveSim}
+        />
+      )}
       {overlay}
     </>
   )
