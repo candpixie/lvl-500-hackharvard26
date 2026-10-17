@@ -38,3 +38,25 @@ Checked live. Everything below is free, and none of it needs a key unless noted.
 ## Hook to test with the team
 SpaceX filed (Jan 30 2026) for up to **1 million** orbital data center satellites. Low Earth orbit holds
 about **29,000** tracked objects today. Where would a million more fit, and what would that shell look like?
+
+## Update: everything free is downloaded (`pipeline/fetch_orbits.py`, Fri late)
+Raw files land in `data/raw/celestrak/` (not committed). Run the script once per person.
+
+**Coverage: 20,039 objects with orbits out of 35,044 tracked in orbit.**
+| Type | Have orbits | In orbit | Missing |
+|---|---|---|---|
+| Payloads (satellites) | 16,739 | 20,149 | about 3,400 (mostly dead satellites) |
+| Debris | 2,680 | 12,543 | about 9,900 |
+| Rocket bodies | 12 | 2,297 | **almost all** |
+
+- Free CelesTrak feeds cover working satellites and the famous breakups only.
+- **Rocket bodies are the biggest objects in orbit and we have almost none of them.** For a real
+  "what's around my spot" view, we need **Space-Track** (free account, `gp` class has all ~30k).
+  Read its user agreement before putting any of its data in a public repo.
+- The `starlink` group returned 403 (throttled). Starlink is already inside `active`, label by name.
+
+**SOCRATES: 195,841 predicted close approaches** for the next 7 days (`socrates-minrange.csv`):
+both objects, time of closest approach, miss distance (km), relative speed (km/s), max probability.
+- This is the real-world answer key for any "crowding" score we make.
+- Filter out pairs from the same constellation (Starlink vs Starlink pairs show probability 1.0,
+  likely formation flying or a modeling artifact). Check the SOCRATES format page before trusting MAX_PROB.
