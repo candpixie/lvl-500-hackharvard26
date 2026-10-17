@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import Globe from 'globe.gl'
-import {
-  BufferGeometry,
-  Float32BufferAttribute,
-  Points,
-  ShaderMaterial,
-  type MeshPhongMaterial,
-} from 'three'
+import { ShaderMaterial, type MeshPhongMaterial } from 'three'
 import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
-import type { OrbitCounts, WorkerOut } from './orbit.ts'
+import { createFleet, type Fleet } from './fleet.ts'
+import ObjectCard from './ObjectCard.tsx'
+import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
+import { screenNearest } from './pick.ts'
 import PlacePanel from './PlacePanel.tsx'
 import { shellBounds, type ShellRow } from './shells.ts'
 
@@ -26,48 +23,42 @@ const ALTITUDE_EXAGGERATION = 5.5
 
 type Status = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready' }
 
-const pointVertex = `
+const craftVertex = `
   attribute float aAlt;
   attribute float aKind;
+  attribute float aId;
   uniform float uShellMin;
   uniform float uShellMax;
   uniform float uDim;
   uniform float uHideOutside;
   uniform float uDebrisOnly;
-  uniform float uExaggerate;
-  uniform float uSize;
-  uniform float uScale;
+  uniform float uPick;
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
-    float realRel = max(length(position) / 100.0 - 1.0, 0.0);
-    float capped = min(realRel, 0.5);
-    vec3 placed = normalize(position) * 100.0 * (1.0 + capped * uExaggerate);
     float inside = step(uShellMin, aAlt) * step(aAlt, uShellMax);
     float debris = step(0.5, aKind);
-    vColor = color;
+    float picked = step(abs(aId - uPick), 0.5);
+    vec3 shaped = position * mix(1.0, 1.65, picked);
+    vec4 placed = instanceMatrix * vec4(shaped, 1.0);
+    vec3 lit = normalize(mat3(instanceMatrix) * normal);
+    float shade = 0.62 + 0.38 * max(dot(lit, normalize(vec3(0.35, 0.82, 0.28))), 0.0);
     if (debris > 0.5) vAlpha = mix(uDebrisOnly > 0.5 ? 0.1 : 0.78, 1.0, inside);
     else vAlpha = mix(uDim, 1.0, inside);
     if (uHideOutside > 0.5) vAlpha *= inside;
     if (uDebrisOnly > 0.5) vAlpha *= debris;
-    vec4 mv = modelViewMatrix * vec4(placed, 1.0);
-    float outsideScale = uDebrisOnly > 0.5 ? 0.35 : 0.72;
-    float boost = mix(1.0, 2.7, debris) * mix(outsideScale, 2.0, inside);
-    gl_PointSize = uSize * boost * (uScale / -mv.z);
-    gl_Position = projectionMatrix * mv;
+    vAlpha = max(vAlpha, picked);
+    vColor = color * instanceColor * shade * mix(1.0, 1.25, picked);
+    gl_Position = projectionMatrix * modelViewMatrix * placed;
   }
 `
 
-const pointFragment = `
+const craftFragment = `
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
-    if (vAlpha < 0.01) discard;
-    vec2 centered = gl_PointCoord - vec2(0.5);
-    float dist = dot(centered, centered);
-    if (dist > 0.25) discard;
-    float edge = smoothstep(0.25, 0.02, dist);
-    gl_FragColor = vec4(vColor, vAlpha * edge);
+    if (vAlpha < 0.03) discard;
+    gl_FragColor = vec4(vColor * vAlpha, 1.0);
   }
 `
 
@@ -90,7 +81,7 @@ function webglAvailable() {
   }
 }
 
-function shellMaterial(altitudeKm: number) {
+function fleetMaterial(altitudeKm: number) {
   const bounds = shellBounds(altitudeKm)
   return new ShaderMaterial({
     uniforms: {
@@ -99,14 +90,10 @@ function shellMaterial(altitudeKm: number) {
       uDim: { value: 0.04 },
       uHideOutside: { value: 0 },
       uDebrisOnly: { value: 0 },
-      uExaggerate: { value: ALTITUDE_EXAGGERATION },
-      uSize: { value: 2.2 },
-      uScale: { value: 400 },
+      uPick: { value: -1 },
     },
-    vertexShader: pointVertex,
-    fragmentShader: pointFragment,
-    transparent: true,
-    depthWrite: false,
+    vertexShader: craftVertex,
+    fragmentShader: craftFragment,
     vertexColors: true,
   })
 }
@@ -121,7 +108,13 @@ export default function App() {
   const [shellError, setShellError] = useState<string | null>(null)
   const [debrisOnly, setDebrisOnly] = useState(false)
   const [epoch, setEpoch] = useState('')
+  const [close, setClose] = useState(false)
+  const [fact, setFact] = useState<ObjectFact | null>(null)
+  const [liveKm, setLiveKm] = useState<number | null>(null)
   const [graphics] = useState<'ok' | 'missing'>(() => (webglAvailable() ? 'ok' : 'missing'))
+  const altitudeRef = useRef(altitude)
+  const debrisOnlyRef = useRef(debrisOnly)
+  const clearPickRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     const host = hostRef.current
@@ -173,17 +166,16 @@ export default function App() {
     controls.dampingFactor = 0.08
     controls.rotateSpeed = 0.45
     controls.zoomSpeed = 0.7
-    controls.minDistance = 120
+    controls.minDistance = 160
     controls.maxDistance = 2200
 
-    const material = shellMaterial(START_ALTITUDE)
+    const material = fleetMaterial(START_ALTITUDE)
     const fit = () => {
       const width = window.innerWidth
       const column = Math.min(320, width * 0.42)
       globe.width(width)
       globe.height(window.innerHeight)
       globe.globeOffset([Math.round(column * 0.42), 0])
-      material.uniforms.uScale.value = globe.renderer().domElement.height * 0.5
     }
     fit()
     window.addEventListener('resize', fit)
@@ -192,6 +184,8 @@ export default function App() {
       const bounds = shellBounds(altitudeKm)
       material.uniforms.uShellMin.value = bounds.min
       material.uniforms.uShellMax.value = bounds.max
+      const realRel = Math.min(Math.max(altitudeKm, 0) / 6371, 0.5)
+      controls.minDistance = 100 * (1 + realRel * ALTITUDE_EXAGGERATION) + 22
     }
     debrisRef.current = (on) => {
       material.uniforms.uDebrisOnly.value = on ? 1 : 0
@@ -202,11 +196,77 @@ export default function App() {
       setStatus({ state: 'error', message: 'WebGL stopped. The orbit map cannot draw without it.' })
     })
 
+    const positionsRef = { current: null as Float32Array | null }
+    const altitudesRef = { current: null as Float32Array | null }
+    const kindsRef = { current: null as Float32Array | null }
+    const factsRef = { current: [] as ObjectFact[] }
+    let picked = -1
+    let zoomed = false
+
+    const clearPick = () => {
+      picked = -1
+      material.uniforms.uPick.value = -1
+      setFact(null)
+      setLiveKm(null)
+    }
+    clearPickRef.current = clearPick
+
     globe.onZoom((pov: { altitude: number }) => {
-      material.uniforms.uHideOutside.value = pov.altitude < ZOOM_HIDE_ALTITUDE ? 1 : 0
+      const next = pov.altitude < ZOOM_HIDE_ALTITUDE
+      material.uniforms.uHideOutside.value = next ? 1 : 0
+      if (next === zoomed) return
+      zoomed = next
+      setClose(next)
+      if (!next) clearPick()
     })
 
-    let cloud: Points | null = null
+    let fleet: Fleet | null = null
+    const canvas = globe.renderer().domElement
+    let pickFrame = 0
+    const onPointerMove = (event: PointerEvent) => {
+      if (!zoomed) return
+      const rect = canvas.getBoundingClientRect()
+      const x = event.clientX - rect.left
+      const y = event.clientY - rect.top
+      cancelAnimationFrame(pickFrame)
+      pickFrame = requestAnimationFrame(() => {
+        const positions = positionsRef.current
+        const pointAltitudes = altitudesRef.current
+        const kinds = kindsRef.current
+        if (!positions || !pointAltitudes || !kinds) return
+        const index = screenNearest({
+          positions,
+          altitudes: pointAltitudes,
+          kinds,
+          camera: globe.camera(),
+          width: rect.width,
+          height: rect.height,
+          x,
+          y,
+          altitudeKm: altitudeRef.current,
+          debrisOnly: debrisOnlyRef.current,
+          radiusPx: 28,
+        })
+        const next = index ?? -1
+        if (next === picked) return
+        picked = next
+        material.uniforms.uPick.value = picked
+        if (index == null) {
+          setFact(null)
+          setLiveKm(null)
+          return
+        }
+        const length = Math.hypot(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2])
+        setLiveKm((length / 100 - 1) * 6371)
+        setFact(factsRef.current[index] ?? null)
+      })
+    }
+    const onPointerLeave = () => {
+      cancelAnimationFrame(pickFrame)
+      if (picked >= 0) clearPick()
+    }
+    canvas.addEventListener('pointermove', onPointerMove)
+    canvas.addEventListener('pointerleave', onPointerLeave)
     const worker = new Worker(new URL('./propagate.worker.ts', import.meta.url), { type: 'module' })
 
     worker.onerror = () => {
@@ -220,45 +280,63 @@ export default function App() {
         return
       }
       if (message.kind === 'ready') {
-        const geometry = new BufferGeometry()
-        geometry.setAttribute('position', new Float32BufferAttribute(message.positions, 3))
-        geometry.setAttribute('color', new Float32BufferAttribute(message.colors, 3))
-        geometry.setAttribute('aAlt', new Float32BufferAttribute(message.altitudes, 1))
-        geometry.setAttribute('aKind', new Float32BufferAttribute(message.kinds, 1))
+        positionsRef.current = message.positions
+        altitudesRef.current = message.altitudes
+        kindsRef.current = message.kinds
+        factsRef.current = message.facts
+        fleet = createFleet(message.facts, message.altitudes, message.kinds, material, (mesh) => {
+          globe.scene().add(mesh)
+        })
+        fleet.update(message.positions)
         setEpoch(message.epoch)
-        const points = new Points(geometry, material)
-        points.frustumCulled = false
-        globe.scene().add(points)
-        cloud = points
         setStatus({ state: 'ready' })
         return
       }
-      if (!cloud) return
-      const attribute = cloud.geometry.getAttribute('position')
-      const array = attribute.array as Float32Array
-      if (message.positions.length !== array.length) return
-      array.set(message.positions)
-      attribute.needsUpdate = true
+      if (!fleet || message.positions.length !== factsRef.current.length * 3) return
+      positionsRef.current = message.positions
+      fleet.update(message.positions)
+      if (picked >= 0) {
+        const length = Math.hypot(
+          message.positions[picked * 3],
+          message.positions[picked * 3 + 1],
+          message.positions[picked * 3 + 2],
+        )
+        setLiveKm((length / 100 - 1) * 6371)
+      }
     }
 
     return () => {
       applyShellRef.current = () => {}
       debrisRef.current = () => {}
+      clearPickRef.current = () => {}
+      cancelAnimationFrame(pickFrame)
+      canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointerleave', onPointerLeave)
       window.removeEventListener('resize', fit)
       worker.terminate()
       material.dispose()
-      cloud?.geometry.dispose()
+      fleet?.dispose()
       globe._destructor()
     }
   }, [graphics])
 
   useEffect(() => {
+    altitudeRef.current = altitude
     applyShellRef.current(altitude)
   }, [altitude])
 
   useEffect(() => {
+    debrisOnlyRef.current = debrisOnly
     debrisRef.current(debrisOnly)
   }, [debrisOnly])
+
+  useEffect(() => {
+    if (!fact || !close) return
+    const bounds = shellBounds(altitude)
+    const hiddenByShell = fact.meanKm < bounds.min || fact.meanKm > bounds.max
+    const hiddenByDebris = debrisOnly && fact.type !== 'debris'
+    if (hiddenByShell || hiddenByDebris) clearPickRef.current()
+  }, [altitude, debrisOnly, close, fact])
 
   useEffect(() => {
     const load = async () => {
@@ -289,7 +367,7 @@ export default function App() {
       <aside className="hud">
         <p className="kicker">Orbit crowding</p>
         <h1>How crowded is this altitude?</h1>
-        <p className="dek">That shell stays bright.</p>
+        <p className="dek">{close ? 'Point at a satellite.' : 'That shell stays bright.'}</p>
         <p className="asof">{epoch ? `Data as of ${formatEpoch(epoch)}` : 'CelesTrak GP'}</p>
         <PlacePanel
           altitude={altitude}
@@ -309,6 +387,7 @@ export default function App() {
         </ul>
         <p className="source">CelesTrak GP</p>
       </aside>
+      {close && fact && <ObjectCard fact={fact} liveKm={liveKm} />}
       {overlay}
     </>
   )

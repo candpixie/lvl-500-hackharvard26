@@ -8,7 +8,7 @@ import {
   type OMMJsonObject,
   type SatRec,
 } from 'satellite.js'
-import type { OrbitCounts, WorkerOut } from './orbit.ts'
+import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
 
 const EARTH_RADIUS_KM = 6371
 const GLOBE_RADIUS = 100
@@ -21,9 +21,17 @@ const COLOR: Record<keyof OrbitCounts, readonly [number, number, number]> = {
 }
 
 interface CatalogObject {
+  norad: number
+  name: string
   type: string
+  owner: string | null
+  launch_date: string | null
+  radar_size_m2: number | null
   apogee_km: number | null
   perigee_km: number | null
+  constellation: string | null
+  groups: string[]
+  source_group: string
   omm: OMMJsonObject
 }
 
@@ -104,6 +112,7 @@ async function main() {
   const colorList: number[] = []
   const altitudeList: number[] = []
   const kindList: number[] = []
+  const facts: ObjectFact[] = []
   let latestEpoch = ''
   const counts: OrbitCounts = { satellite: 0, debris: 0, 'rocket body': 0, unknown: 0 }
 
@@ -123,6 +132,22 @@ async function main() {
     colorList.push(r, g, b)
     altitudeList.push(meanAltitude(obj))
     kindList.push(type === 'debris' ? 1 : 0)
+    const inclination = obj.omm.INCLINATION
+    facts.push({
+      name: obj.name,
+      norad: obj.norad,
+      type,
+      owner: obj.owner,
+      launch: obj.launch_date,
+      apogee: obj.apogee_km,
+      perigee: obj.perigee_km,
+      meanKm: meanAltitude(obj),
+      inclination: typeof inclination === 'number' && Number.isFinite(inclination) ? inclination : null,
+      radar: typeof obj.radar_size_m2 === 'number' && obj.radar_size_m2 > 0 ? obj.radar_size_m2 : null,
+      constellation: obj.constellation,
+      groups: obj.groups ?? [],
+      sourceGroup: obj.source_group,
+    })
     const epoch = obj.omm.EPOCH
     if (typeof epoch === 'string' && epoch > latestEpoch) latestEpoch = epoch
   }
@@ -143,6 +168,7 @@ async function main() {
       altitudes,
       kinds,
       epoch: latestEpoch.slice(0, 10),
+      facts,
     },
     [colors.buffer, firstFrame.buffer, altitudes.buffer, kinds.buffer],
   )
