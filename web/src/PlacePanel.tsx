@@ -6,9 +6,8 @@ function formatCount(value: number) {
   return value.toLocaleString('en-US')
 }
 
-function formatCollisions(value: number) {
-  const shown = value < 1 ? value.toFixed(2) : Math.round(value).toLocaleString('en-US')
-  return `${shown} expected collisions per year (first-order model)`
+function formatCollisionCount(value: number) {
+  return value < 1 ? value.toFixed(2) : Math.round(value).toLocaleString('en-US')
 }
 
 interface PlacePanelProps {
@@ -46,20 +45,21 @@ export default function PlacePanel({
       {!shells && !shellError && <p className="shell-note">Loading shell counts</p>}
       {current && (
         <>
-          <p className="shell-count">{formatCount(shellTotal(current))}</p>
-          <p className="shell-range">{shellRange(current)}</p>
+          <p className="shell-count num">{formatCount(shellTotal(current))}</p>
+          <p className="shell-range num">{shellRange(current)}</p>
           <p className="shell-majority">{majorityLabel(current)}</p>
           {place && (
             <p
               className="shell-note"
               title={`${place.note}. Expected collisions per year is a first-order model. Lifetime is approximate.`}
             >
-              {Math.round(place.score)}/100, higher is safer · wreckage stays ~
-              {Math.round(place.dead_sat_lifetime_years)} yr
+              <span className="num">{Math.round(place.score)}/100</span>, higher is safer · wreckage stays ~
+              <span className="num">{Math.round(place.dead_sat_lifetime_years)} yr</span>
               <br />
-              {formatCollisions(place.collisions_per_year)}
+              <span className="num">{formatCollisionCount(place.collisions_per_year)}</span> expected collisions per
+              year (first-order model)
               <br />
-              1,000 × 4 m sats · tracked objects only, lower bound
+              <span className="num">1,000 × 4 m</span> sats · tracked objects only, lower bound
             </p>
           )}
           <p
@@ -72,8 +72,8 @@ export default function PlacePanel({
       )}
       <label className="field">
         <span className="field-label">
-          Altitude
-          <span>{Math.round(altitude).toLocaleString('en-US')} km</span>
+          <span className="mark">Altitude</span>
+          <span className="num">{Math.round(altitude).toLocaleString('en-US')} km</span>
         </span>
         <input
           type="range"
@@ -85,7 +85,7 @@ export default function PlacePanel({
         />
       </label>
       <p className="shell-note">
-        Altitude exaggerated 5.5×
+        Altitude exaggerated <span className="num">5.5×</span>
         <br />
         Enlarged, not to scale
       </p>

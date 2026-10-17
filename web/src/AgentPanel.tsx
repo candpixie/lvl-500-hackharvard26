@@ -120,12 +120,15 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
 
   return (
     <aside className="hud hud-agent">
-      <div className="chips">
+      <div className="command-head">
+        <p className="kicker">Grok</p>
+        <div className="chips">
         {PROMPTS.map((item) => (
           <button key={item.label} type="button" className="chip" disabled={busy} onClick={() => setQuestion(item.question)}>
             {item.label}
           </button>
         ))}
+        </div>
       </div>
       <div className="ask-row">
         <input

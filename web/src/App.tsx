@@ -10,10 +10,9 @@ import {
   ShaderMaterial,
   type MeshPhongMaterial,
 } from 'three'
-import '@fontsource/ibm-plex-sans/400.css'
-import '@fontsource/ibm-plex-sans/500.css'
-import '@fontsource/ibm-plex-mono/400.css'
-import '@fontsource/ibm-plex-mono/500.css'
+import '@fontsource-variable/jost'
+import '@fontsource-variable/geist'
+import '@fontsource-variable/geist-mono'
 import AgentPanel from './AgentPanel.tsx'
 import type { FocusOrbit } from './events.ts'
 import { createFleet, type Fleet } from './fleet.ts'
@@ -512,7 +511,15 @@ export default function App() {
         <p className="kicker">Orbit Payback</p>
         <h1>How crowded is this altitude?</h1>
         <p className="dek">{close ? 'Point at a satellite.' : 'That shell stays bright.'}</p>
-        <p className="asof">{epoch ? `Data as of ${formatEpoch(epoch)}` : 'CelesTrak GP'}</p>
+        <p className="asof">
+          {epoch ? (
+            <>
+              Data as of <span className="num">{formatEpoch(epoch)}</span>
+            </>
+          ) : (
+            'CelesTrak GP'
+          )}
+        </p>
         <PlacePanel
           altitude={altitude}
           shells={shells}

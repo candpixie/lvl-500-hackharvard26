@@ -82,12 +82,14 @@ export default function ObjectCard({ fact, liveKm }: { fact: ObjectFact; liveKm:
         {fact.type === 'unknown' ? 'unidentified' : fact.type}
       </p>
       <h2>{fact.name}</h2>
-      <p className="inspect-id">NORAD {fact.norad.toLocaleString('en-US')}</p>
+      <p className="inspect-id">
+        NORAD <span className="num">{fact.norad.toLocaleString('en-US')}</span>
+      </p>
       <dl>
         {rows.map((row) => (
           <div key={row.label}>
             <dt>{row.label}</dt>
-            <dd>{row.value}</dd>
+            <dd className={row.label === 'Owner' || row.label === 'Group' ? undefined : 'num'}>{row.value}</dd>
           </div>
         ))}
       </dl>

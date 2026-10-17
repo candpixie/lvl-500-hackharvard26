@@ -9,7 +9,7 @@ body,
 }
 
 body {
-  font-family: 'IBM Plex Sans', ui-sans-serif, sans-serif;
+  font-family: 'Geist Variable', ui-sans-serif, sans-serif;
   color: #c9d6e3;
 }
 
@@ -26,22 +26,9 @@ body {
   height: 100% !important;
 }
 
-.kicker,
-.asof,
-.legend,
-.source,
-.shell-count,
-.shell-range,
-.shell-majority,
-.shell-note,
-.field,
-.debris-toggle,
-.inspect-type,
-.inspect-id,
-.inspect dt,
-.inspect dd,
-.status {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+.num {
+  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .hud {
@@ -73,6 +60,10 @@ body {
 .asof {
   margin: 0;
   font-size: 11px;
+}
+
+.hud > .kicker,
+.mark {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -84,10 +75,11 @@ body {
 h1 {
   margin: 6px 0 0;
   max-width: 12em;
-  font-size: 18px;
+  font-family: 'Jost Variable', ui-sans-serif, sans-serif;
+  font-size: 32px;
   font-weight: 500;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
 }
 
 .dek {
@@ -119,8 +111,6 @@ h1 {
 .count-label {
   margin-top: 8px;
   font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
   color: rgba(201, 214, 227, 0.62);
 }
 
@@ -166,8 +156,6 @@ h1 {
   place-items: center;
   padding: 24px;
   font-size: 13px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   text-align: center;
   color: rgba(201, 214, 227, 0.8);
   background: rgba(5, 7, 11, 0.72);
@@ -195,8 +183,6 @@ h1 {
 .presets,
 .quieter {
   font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .panel-kicker {
@@ -296,9 +282,7 @@ h1 {
   border-bottom: 1px solid rgba(242, 165, 65, 0.75);
   background: transparent;
   color: #f2a541;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -389,9 +373,7 @@ h1 {
 }
 
 .inspect-type {
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 12px;
 }
 
 .inspect h2 {
@@ -404,9 +386,7 @@ h1 {
 
 .inspect-id {
   margin-top: 6px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
   color: rgba(201, 214, 227, 0.5);
 }
 
@@ -422,9 +402,7 @@ h1 {
 }
 
 .inspect dt {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 12px;
   color: rgba(201, 214, 227, 0.48);
 }
 
@@ -452,6 +430,16 @@ h1 {
 
 .hud-agent::before {
   display: none;
+}
+
+.command-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hud-agent .kicker {
+  flex: 0 0 auto;
 }
 
 .chips {
@@ -515,8 +503,6 @@ h1 {
   background: #e7f27a;
   border: 1px solid #e7f27a;
   font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -567,11 +553,7 @@ h1 {
 }
 
 @media (max-height: 760px) {
-  .hud {
+  .hud:not(.hud-agent) {
     top: 14px;
-  }
-
-  h1 {
-    font-size: 18px;
   }
 }
