@@ -234,7 +234,6 @@ export default function App() {
     image: { src: string; label: string } | null
   } | null>(null)
   const [altitude, setAltitude] = useState(START_ALTITUDE)
-  const [altitudeChosen, setAltitudeChosen] = useState(false)
   const [inclination, setInclination] = useState(53)
   const [count, setCount] = useState(1000)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
@@ -331,9 +330,9 @@ export default function App() {
     globe
       .backgroundColor('#05070B')
       .showAtmosphere(true)
-      .atmosphereColor('#9bb8d4')
-      .atmosphereAltitude(0.11)
-      .pointOfView({ lat: 18, lng: 12, altitude: 1.65 }, 0)
+      .atmosphereColor('#d7e6f4')
+      .atmosphereAltitude(0.15)
+      .pointOfView({ lat: 18, lng: 12, altitude: 1.65 * 1.25 }, 0)
 
     const surface = globe.globeMaterial() as MeshPhongMaterial
     surface.color.set('#243444')
@@ -362,6 +361,41 @@ export default function App() {
     controls.zoomSpeed = 0.7
     controls.minDistance = 160
     controls.maxDistance = 2200
+    controls.autoRotate = false
+    controls.autoRotateSpeed = 1
+
+    const HOME = { lat: 18, lng: 12, altitude: 1.65 }
+    const INTRO_MS = 2500
+    const FLY_MS = 1400
+    const IDLE_MS = 10_000
+    let userPaused = false
+    let inSimView = false
+    let spinHeldUntil = 0
+    let idleTimer = 0
+    let releaseTimer = 0
+    const canSpin = () => !userPaused && !inSimView && !simLiveRef.current && performance.now() >= spinHeldUntil
+    const releaseSpin = () => {
+      if (canSpin()) controls.autoRotate = true
+    }
+    const holdSpin = (ms: number) => {
+      controls.autoRotate = false
+      spinHeldUntil = performance.now() + ms
+      window.clearTimeout(releaseTimer)
+      releaseTimer = window.setTimeout(releaseSpin, ms)
+    }
+    const pauseForUser = () => {
+      userPaused = true
+      controls.autoRotate = false
+      window.clearTimeout(idleTimer)
+      idleTimer = window.setTimeout(() => {
+        userPaused = false
+        releaseSpin()
+      }, IDLE_MS)
+    }
+    requestAnimationFrame(() => {
+      globe.pointOfView(HOME, INTRO_MS)
+    })
+    holdSpin(INTRO_MS)
 
     const dots = pointMaterial(START_ALTITUDE)
     const models = fleetMaterial(START_ALTITUDE)
@@ -405,6 +439,7 @@ export default function App() {
     const orbitMaterial = new LineBasicMaterial({ color: ORBIT_COLOR, transparent: true, opacity: 0.9 })
     flyRef.current = (focus) => {
       if (simLiveRef.current) return
+      holdSpin(FLY_MS)
       const { positions } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
       if (orbit) {
         globe.scene().remove(orbit)
@@ -519,6 +554,8 @@ export default function App() {
     }
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('pointerleave', onPointerLeave)
+    canvas.addEventListener('pointerenter', pauseForUser)
+    canvas.addEventListener('wheel', pauseForUser, { passive: true })
 
     const lockSimTarget = (positions: Float32Array, index: number) => {
       const [x, y, z] = exaggeratePoint(
@@ -554,6 +591,8 @@ export default function App() {
       lockSimTarget(catalog.positions, index)
       const { eye } = simCameraRig(simTarget.x, simTarget.y, simTarget.z)
       globe.globeOffset([0, 0])
+      inSimView = true
+      controls.autoRotate = false
       controls.minDistance = 12
       controls.maxDistance = 80
       controls.rotateSpeed = 0.85
@@ -589,7 +628,9 @@ export default function App() {
       setClose(zoomed)
       syncShell(altitudeRef.current)
       fit()
-      globe.pointOfView({ lat: 18, lng: 12, altitude: 1.65 }, 900)
+      inSimView = false
+      globe.pointOfView(HOME, 900)
+      holdSpin(900)
     }
 
     const worker = new Worker(new URL('./propagate.worker.ts', import.meta.url), { type: 'module' })
@@ -652,6 +693,7 @@ export default function App() {
     const origin = new Vector3()
     const dir = new Vector3()
     const onDown = (event: PointerEvent) => {
+      pauseForUser()
       downX = event.clientX
       downY = event.clientY
     }
@@ -679,8 +721,12 @@ export default function App() {
       debrisRef.current = () => {}
       clearPickRef.current = () => {}
       cancelAnimationFrame(pickFrame)
+      window.clearTimeout(idleTimer)
+      window.clearTimeout(releaseTimer)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerleave', onPointerLeave)
+      canvas.removeEventListener('pointerenter', pauseForUser)
+      canvas.removeEventListener('wheel', pauseForUser)
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointerup', onUp)
       cancelAnimationFrame(refit)
@@ -767,7 +813,6 @@ export default function App() {
         </p>
         <PlacePanel
           altitude={altitude}
-          altitudeChosen={altitudeChosen}
           inclination={inclination}
           count={count}
           shells={shells}
@@ -775,7 +820,6 @@ export default function App() {
           debrisOnly={debrisOnly}
           onAltitude={(value) => {
             setAltitude(value)
-            setAltitudeChosen(true)
             flyRef.current({ altitude_km: value, inclination_deg: inclination })
           }}
           onInclination={(value) => {
@@ -786,7 +830,6 @@ export default function App() {
           onDebrisOnly={setDebrisOnly}
           onScene={(scene) => {
             setAltitude(scene.altitude)
-            setAltitudeChosen(true)
             if (scene.inclination != null) setInclination(scene.inclination)
             if (scene.count != null) setCount(scene.count)
             if (scene.debrisOnly != null) setDebrisOnly(scene.debrisOnly)
@@ -825,7 +868,6 @@ export default function App() {
         onFocus={(focus) => {
           const next = Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10))
           setAltitude(next)
-          setAltitudeChosen(true)
           setInclination(focus.inclination_deg)
           flyRef.current({ ...focus, altitude_km: next })
         }}

@@ -37,7 +37,7 @@ body {
   left: 24px;
   z-index: 2;
   width: min(280px, calc(100vw - 48px));
-  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 140px);
   margin: 0;
   overflow: auto;
   pointer-events: auto;
@@ -295,6 +295,11 @@ h1 {
   color: rgba(201, 214, 227, 0.62);
 }
 
+.field-label.step-size {
+  justify-content: flex-start;
+  gap: 6px;
+}
+
 .field-label span:last-child {
   color: #c9d6e3;
   letter-spacing: 0.04em;
@@ -495,6 +500,14 @@ h1 {
   letter-spacing: 0;
   text-transform: none;
   font-size: 13px;
+}
+
+.quieter-note {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: rgba(201, 214, 227, 0.55);
 }
 
 .shell .source {

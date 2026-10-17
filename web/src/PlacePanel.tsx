@@ -39,7 +39,6 @@ interface SavedPlacement {
 
 interface PlacePanelProps {
   altitude: number
-  altitudeChosen: boolean
   inclination: number
   count: number
   shells: ShellRow[] | null
@@ -55,7 +54,6 @@ interface PlacePanelProps {
 
 export default function PlacePanel({
   altitude,
-  altitudeChosen,
   inclination,
   count,
   shells,
@@ -76,7 +74,6 @@ export default function PlacePanel({
   const [miss, setMiss] = useState<NearMiss | null>(null)
   const [saved, setSaved] = useState<SavedPlacement[]>([])
   const nextSaveId = useRef(1)
-  const dims = dimsFor(size)
 
   useEffect(() => {
     const nextDims = dimsFor(size)
@@ -132,10 +129,9 @@ export default function PlacePanel({
           Your mission
         </h2>
         <label className="field">
-          <span className="field-label">
-            Size
-            <span className="num">
-              {formatLength(dims[0])}×{formatLength(dims[1])}×{formatLength(dims[2])} m
+          <span className="field-label step-size">
+            <span>
+              <span className="num">{formatLength(size)} m</span> longest side
             </span>
           </span>
           <input
@@ -145,7 +141,7 @@ export default function PlacePanel({
             max={20}
             step={1}
             value={size}
-            aria-label="Satellite size in meters"
+            aria-label="Longest side in meters"
             onChange={(event) => chooseSize(event.target.value)}
           />
         </label>
@@ -251,21 +247,6 @@ export default function PlacePanel({
           Enlarged, not to scale
         </p>
 
-        <div className="presets beat-presets">
-          <button type="button" onClick={() => onScene({ altitude: 900, count: 1_000_000, debrisOnly: false })}>
-            <span>1M at 900 km</span>
-            <span>self-crowding</span>
-          </button>
-          <button type="button" onClick={() => onScene({ altitude: 525, debrisOnly: false })}>
-            <span>Safest 500 km</span>
-            <span>clears in years</span>
-          </button>
-          <button type="button" onClick={() => onScene({ altitude: 825, debrisOnly: true })}>
-            <span>Debris 800 km</span>
-            <span>junk stays</span>
-          </button>
-        </div>
-
         <button
           className="debris-toggle"
           type="button"
@@ -276,8 +257,7 @@ export default function PlacePanel({
         </button>
       </section>
 
-      {altitudeChosen && (
-        <section className="step">
+      <section className="step">
           <h2 className="step-title">
             <span className="step-num num">3</span>
             Impact
@@ -314,10 +294,8 @@ export default function PlacePanel({
             </button>
           )}
         </section>
-      )}
 
-      {altitudeChosen && (
-        <section className="step">
+      <section className="step">
           <h2 className="step-title">
             <span className="step-num num">4</span>
             Save & compare
@@ -346,11 +324,10 @@ export default function PlacePanel({
             </ol>
           )}
         </section>
-      )}
 
       <button type="button" className="quieter" onClick={onVisualizeShell}>
         <strong>Visualize this shell</strong>
-        Grok Imagine · illustration of nearby objects
+        <span className="quieter-note">Grok Imagine · illustration of nearby objects</span>
       </button>
     </div>
   )
