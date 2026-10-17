@@ -31,6 +31,48 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.legend-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+
+.clock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.clock button {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  color: #c9d6e3;
+  background: transparent;
+  border: 1px solid rgba(201, 214, 227, 0.28);
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.clock button[aria-pressed='true'] {
+  color: #05070b;
+  background: #e7f27a;
+  border-color: #e7f27a;
+}
+
+.clock-time {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: rgba(201, 214, 227, 0.72);
+}
+
 .hud {
   position: fixed;
   top: 20px;
@@ -115,7 +157,7 @@ h1 {
 }
 
 .legend {
-  margin: 8px 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
@@ -135,6 +177,11 @@ h1 {
 .swatch {
   width: 8px;
   height: 8px;
+}
+
+.swatch-constellation {
+  background: #67e8f9;
+  border-radius: 50%;
 }
 
 .legend-count {
@@ -269,6 +316,14 @@ h1 {
   gap: 2px;
 }
 
+.saved-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid rgba(201, 214, 227, 0.12);
+}
+
 .saved-row {
   display: grid;
   grid-template-columns: 1.4fr 0.7fr 1.3fr 0.9fr;
@@ -281,8 +336,24 @@ h1 {
   color: #c9d6e3;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid rgba(201, 214, 227, 0.12);
   cursor: pointer;
+}
+
+.saved-remove {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  color: rgba(201, 214, 227, 0.62);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.saved-remove:hover {
+  color: #e7f27a;
 }
 
 .saved-row:hover {

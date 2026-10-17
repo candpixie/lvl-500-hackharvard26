@@ -373,7 +373,7 @@ export default function PlacePanel({
           {saved.length > 0 && (
             <ol className="saved-list">
               {saved.map((row) => (
-                <li key={row.id}>
+                <li key={row.id} className="saved-item">
                   <button
                     type="button"
                     className="saved-row"
@@ -385,6 +385,14 @@ export default function PlacePanel({
                     <span className="num">{row.inclination}°</span>
                     <span className="num">{formatCount(row.count)}</span>
                     <span className="num">{row.score}/100</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="saved-remove"
+                    aria-label={`Remove ${row.altitude} km`}
+                    onClick={() => setSaved((rows) => rows.filter((item) => item.id !== row.id))}
+                  >
+                    ×
                   </button>
                 </li>
               ))}

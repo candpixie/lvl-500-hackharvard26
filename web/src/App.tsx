@@ -7,6 +7,7 @@ import {
   Line,
   LineBasicMaterial,
   Points,
+  PointsMaterial,
   ShaderMaterial,
   Vector3,
   type MeshPhongMaterial,
@@ -22,7 +23,7 @@ import { imagineGrok, neighborhoodPrompt } from './events.ts'
 import { createFleet, type Fleet } from './fleet.ts'
 import NeighborhoodCard from './NeighborhoodCard.tsx'
 import ObjectCard from './ObjectCard.tsx'
-import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
+import { RING_DRAW_CAP, type ObjectFact, type OrbitCounts, type WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
 import { GLOBE_RADIUS, goldStarSprite, orbitLine, ORBIT_COLOR } from './place.ts'
 import {
@@ -247,6 +248,13 @@ export default function App() {
   const [shells, setShells] = useState<ShellRow[] | null>(null)
   const [shellError, setShellError] = useState<string | null>(null)
   const [debrisOnly, setDebrisOnly] = useState(false)
+  const [clockRate, setClockRate] = useState<1 | 60 | 600>(1)
+  const [simLabel, setSimLabel] = useState('')
+  const workerRef = useRef<Worker | null>(null)
+  const fastRef = useRef(false)
+  const controlsRef = useRef<{ autoRotate: boolean } | null>(null)
+  const releaseSpinRef = useRef<() => void>(() => {})
+  fastRef.current = clockRate > 1
   const [epoch, setEpoch] = useState('')
   const [close, setClose] = useState(false)
   const [fact, setFact] = useState<ObjectFact | null>(null)
@@ -281,6 +289,7 @@ export default function App() {
       return
     }
     simLiveRef.current = true
+    setClockRate(1)
     setSim({ phase: 'live', hood: viz.hood, image: null })
     enterSimRef.current(viz.hood.pickedIndex)
   }
@@ -288,6 +297,7 @@ export default function App() {
   function startLiveSim() {
     if (!sim) return
     simLiveRef.current = true
+    setClockRate(1)
     setSim({ ...sim, phase: 'live' })
     setAltitude(Math.round(sim.hood.picked.alt_km / 10) * 10)
     enterSimRef.current(sim.hood.pickedIndex)
@@ -374,6 +384,7 @@ export default function App() {
     controls.maxDistance = 2200
     controls.autoRotate = false
     controls.autoRotateSpeed = 1
+    controlsRef.current = controls
 
     const HOME = { lat: 18, lng: 12, altitude: 2.6 }
     const INTRO_MS = 2500
@@ -385,10 +396,12 @@ export default function App() {
     let spinHeldUntil = 0
     let idleTimer = 0
     let releaseTimer = 0
-    const canSpin = () => !userPaused && !inSimView && !simLiveRef.current && performance.now() >= spinHeldUntil
+    const canSpin = () =>
+      !fastRef.current && !userPaused && !inSimView && !simLiveRef.current && performance.now() >= spinHeldUntil
     const releaseSpin = () => {
       if (canSpin()) controls.autoRotate = true
     }
+    releaseSpinRef.current = releaseSpin
     const holdSpin = (ms: number) => {
       controls.autoRotate = false
       spinHeldUntil = performance.now() + ms
@@ -510,8 +523,25 @@ export default function App() {
       return nativeUpdate()
     }
 
+    const ringPositions = new Float32Array(RING_DRAW_CAP * 3)
+    const ringGeometry = new BufferGeometry()
+    ringGeometry.setAttribute('position', new Float32BufferAttribute(ringPositions, 3))
+    ringGeometry.setDrawRange(0, 0)
+    const ringMaterial = new PointsMaterial({
+      color: '#67e8f9',
+      size: 4,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    })
+    const ringCloud = new Points(ringGeometry, ringMaterial)
+    ringCloud.frustumCulled = false
+    globe.scene().add(ringCloud)
+
     const showModels = (on: boolean) => {
       if (cloud) cloud.visible = !on
+      ringCloud.visible = !on
       fleet?.setVisible(on)
       for (const material of materials) material.uniforms.uHideOutside.value = on ? 1 : 0
       if (on && positionsRef.current) fleet?.update(positionsRef.current)
@@ -519,6 +549,7 @@ export default function App() {
 
     const hideForSim = () => {
       if (cloud) cloud.visible = false
+      ringCloud.visible = false
       fleet?.setVisible(false)
       if (orbit) orbit.visible = false
       star.visible = false
@@ -730,6 +761,8 @@ export default function App() {
     }
 
     const worker = new Worker(new URL('./propagate.worker.ts', import.meta.url), { type: 'module' })
+    workerRef.current = worker
+    let clockLabel = ''
 
     worker.onerror = () => {
       setStatus({ state: 'error', message: 'Orbit worker failed' })
@@ -766,6 +799,18 @@ export default function App() {
         return
       }
       if (!cloud || !fleet || message.positions.length !== factsRef.current.length * 3) return
+      if (message.ring) {
+        const shown = Math.min(RING_DRAW_CAP, message.ring.length / 3)
+        const attr = ringCloud.geometry.getAttribute('position')
+        ;(attr.array as Float32Array).set(message.ring.subarray(0, shown * 3))
+        attr.needsUpdate = true
+        ringCloud.geometry.setDrawRange(0, shown)
+      }
+      const label = new Date(message.simMs).toISOString().slice(0, 16).replace('T', ' ')
+      if (label !== clockLabel) {
+        clockLabel = label
+        setSimLabel(`${label} UTC`)
+      }
       const positions = cloud.geometry.getAttribute('position')
       const array = positions.array as Float32Array
       array.set(message.positions)
@@ -836,7 +881,13 @@ export default function App() {
       catalogRef.current = null
       window.removeEventListener('resize', fit)
       window.visualViewport?.removeEventListener('resize', fit)
+      workerRef.current = null
+      controlsRef.current = null
+      releaseSpinRef.current = () => {}
       worker.terminate()
+      ringGeometry.dispose()
+      ringMaterial.dispose()
+      ringCloud.removeFromParent()
       dots.dispose()
       models.dispose()
       orbitMaterial.dispose()
@@ -850,6 +901,19 @@ export default function App() {
       globe._destructor()
     }
   }, [graphics])
+
+  useEffect(() => {
+    const worker = workerRef.current
+    if (!worker) return
+    worker.postMessage({ kind: 'rate', rate: clockRate })
+    worker.postMessage({ kind: 'ring', altKm: altitude, incDeg: inclination, count })
+    const controls = controlsRef.current
+    if (clockRate > 1) {
+      if (controls) controls.autoRotate = false
+    } else {
+      releaseSpinRef.current()
+    }
+  }, [clockRate, altitude, inclination, count])
 
   const applyUiEvent = (event: UiEvent) => {
     if (event.type === 'focusOrbit') {
@@ -1001,14 +1065,47 @@ export default function App() {
             if (hood) startViz(hood)
           }}
         />
-        <ul className="legend">
-          {LEGEND.map((item) => (
-            <li key={item.key}>
-              <span className="swatch" style={{ background: item.color }} />
-              <span>{item.label}</span>
+        <div className="legend-block">
+          <ul className="legend">
+            {LEGEND.map((item) => (
+              <li key={item.key}>
+                <span className="swatch" style={{ background: item.color }} />
+                <span>{item.label}</span>
+              </li>
+            ))}
+            <li>
+              <span className="swatch swatch-constellation" />
+              <span>
+                your constellation
+                {count > RING_DRAW_CAP ? (
+                  <span className="legend-count num">
+                    {' '}
+                    showing {RING_DRAW_CAP.toLocaleString('en-US')} of {count.toLocaleString('en-US')}
+                  </span>
+                ) : null}
+              </span>
             </li>
-          ))}
-        </ul>
+          </ul>
+          <div className="clock" role="group" aria-label="Time lapse">
+            {(
+              [
+                [1, '1×'],
+                [60, '60×'],
+                [600, '600×'],
+              ] as const
+            ).map(([rate, label]) => (
+              <button
+                key={rate}
+                type="button"
+                aria-pressed={clockRate === rate}
+                onClick={() => setClockRate(rate)}
+              >
+                <span className="num">{label}</span>
+              </button>
+            ))}
+            {simLabel ? <p className="clock-time num">{simLabel}</p> : null}
+          </div>
+        </div>
         <p className="source">Tracked objects only, lower bound</p>
       </aside>
       {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
