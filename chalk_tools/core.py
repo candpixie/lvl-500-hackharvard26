@@ -244,3 +244,95 @@ def close_approaches(snap: Snapshot, min_altitude_km: float, max_altitude_km: fl
     if not len(m):
         caveats.append("No predicted close approaches in this altitude band.")
     return _ok(snap, data, _coverage(snap), caveats)
+
+
+def crossing_count(snap: Snapshot, lo_km: float, hi_km: float, inclination_deg: float, band_deg: float) -> int:
+    """Tracked objects whose orbit passes through [lo_km, hi_km) at inclination within band_deg."""
+    c = snap.catalog
+    return int(((c.PERIGEE < hi_km) & (c.APOGEE >= lo_km) & ((c.INCLINATION - inclination_deg).abs() <= band_deg)).sum())
+
+
+def _time_fraction(perigee_alt_km, apogee_alt_km, lo_km: float, hi_km: float):
+    """Fraction of each orbit spent between lo_km and hi_km altitude (Kepler's equation, Earth-centered).
+
+    Takes arrays of perigee and apogee altitudes. Near-circular orbits count fully in the shell holding their
+    average altitude. This is what turns 'passes through the shell' into 'is in the shell at a random moment'.
+    """
+    rp = EARTH_RADIUS_KM + np.asarray(perigee_alt_km, dtype=float)
+    ra = EARTH_RADIUS_KM + np.asarray(apogee_alt_km, dtype=float)
+    a = (rp + ra) / 2
+    e = (ra - rp) / (ra + rp)
+    circular = e < 1e-4
+    safe_e = np.where(circular, 1.0, e)
+
+    def mean_anomaly(r):
+        cos_ea = np.clip((1 - (EARTH_RADIUS_KM + r) / a) / safe_e, -1, 1)
+        ea = np.arccos(cos_ea)
+        return ea - e * np.sin(ea)
+
+    frac = (mean_anomaly(hi_km) - mean_anomaly(lo_km)) / np.pi
+    mid = a - EARTH_RADIUS_KM
+    return np.where(circular, ((mid >= lo_km) & (mid < hi_km)).astype(float), np.clip(frac, 0, 1))
+
+
+def shell_occupancy(snap: Snapshot, lo_km: float, hi_km: float, inclination_deg: float, band_deg: float) -> float:
+    """Expected number of tracked objects inside [lo_km, hi_km) at a random moment, near one inclination."""
+    c = snap.catalog.dropna(subset=["APOGEE", "PERIGEE", "INCLINATION"])
+    c = c[(c.INCLINATION - inclination_deg).abs() <= band_deg]
+    c = c[(c.PERIGEE < hi_km) & (c.APOGEE >= lo_km)]
+    return float(_time_fraction(c.PERIGEE.values, c.APOGEE.values, lo_km, hi_km).sum())
+
+
+def recommend_orbit(snap: Snapshot, inclination_deg: float, min_altitude_km: float = 400.0,
+                    max_altitude_km: float = 1200.0, top_n: int = 5, inclination_band_deg: float = 10.0) -> dict:
+    """Rank 50 km shells in a band, quietest first, for a given inclination.
+
+    The ranking is the crowding index only: the expected number of tracked objects inside the shell at a random
+    moment, near this inclination, counting each object for the share of its orbit spent in the shell (fewest
+    first; ties go to the lower shell). A plain count of orbits that merely cross the shell was tried first and
+    rejected: elongated orbits cross every shell but spend almost no time in any. It never reads SOCRATES, so SOCRATES can
+    be used to test whether the index means anything. Quiet means few tracked objects, not safe.
+    """
+    err = (_bad_altitude(snap, min_altitude_km, "min_altitude_km") or _bad_altitude(snap, max_altitude_km, "max_altitude_km")
+           or _bad_inclination(snap, inclination_deg))
+    if err:
+        return err
+    if min_altitude_km >= max_altitude_km:
+        return _fail(snap, "invalid_argument", "min_altitude_km must be smaller than max_altitude_km.")
+    top_n = max(1, min(int(top_n), 10))
+    lo0 = int(math.floor(min_altitude_km / SHELL_KM) * SHELL_KM)
+    hi0 = int(math.ceil(max_altitude_km / SHELL_KM) * SHELL_KM)
+    rows = []
+    for lo in range(lo0, hi0, SHELL_KM):
+        hi = lo + SHELL_KM
+        here = shell_crowding(snap, lo, inclination_deg, inclination_band_deg)["data"]
+        rows.append({
+            "shell_km": [lo, hi],
+            "expected_objects": round(shell_occupancy(snap, lo, hi, inclination_deg, inclination_band_deg), 1),
+            "crossing_objects": crossing_count(snap, lo, hi, inclination_deg, inclination_band_deg),
+            "objects_in_shell": here["total"],
+            "objects_per_million_km3": here["objects_per_million_km3"],
+            "debris_share": round(here["counts"]["DEB"] / here["total"], 3) if here["total"] else None,
+            "majority_type": here["majority_type"],
+        })
+    ranked = sorted(rows, key=lambda r: (r["expected_objects"], r["shell_km"][0]))
+    for i, r in enumerate(ranked, 1):
+        r["rank"] = i
+    data = {
+        "query": {"inclination_deg": inclination_deg, "inclination_band_deg": inclination_band_deg,
+                  "altitude_range_km": [lo0, hi0]},
+        "candidates": ranked[:top_n],
+        "busiest": ranked[-1],
+        "shells_ranked": len(ranked),
+    }
+    caveats = [
+        "Quietest means the fewest tracked objects expected in that shell at a similar inclination. It is not a guarantee of safety.",
+        "Ranked by crowding only; it ignores how long debris stays in orbit, which depends on altitude and is not modeled here.",
+        "Tracked objects only; small debris is not in the catalog.",
+    ]
+    if any(c["shell_km"][0] < 400 for c in ranked[:top_n]):
+        caveats.append("Shells below about 400 km look quiet partly because atmospheric drag pulls objects down quickly; "
+                       "a satellite placed there would be pulled down too.")
+    if any((c["debris_share"] or 0) >= 0.5 for c in ranked[:top_n]):
+        caveats.append("Some quiet shells are mostly debris (see debris_share); few objects there does not mean a clean shell.")
+    return _ok(snap, data, _coverage(snap), caveats)

@@ -59,8 +59,17 @@ def close_approaches(min_altitude_km: float, max_altitude_km: float, limit: int 
                 max_altitude_km=max_altitude_km, limit=limit)
 
 
+@chalkcompute.function(image=IMAGE, tracing=True, cpu="1", memory="2Gi")
+def recommend_orbit(inclination_deg: float, min_altitude_km: float = 400.0, max_altitude_km: float = 1200.0,
+                    top_n: int = 5, inclination_band_deg: float = 10.0) -> str:
+    return _run("recommend_orbit", core.recommend_orbit, inclination_deg=inclination_deg,
+                min_altitude_km=min_altitude_km, max_altitude_km=max_altitude_km, top_n=top_n,
+                inclination_band_deg=inclination_band_deg)
+
+
 if __name__ == "__main__":
     # Smoke test of the deployed functions; one cheap call each.
     print(json.loads(shell_crowding.remote(550.0))["data"]["counts"])
     print(json.loads(objects_near.remote(420.0, 51.6, 3))["data"]["total_matches"])
     print(json.loads(close_approaches.remote(400.0, 600.0, 1))["data"]["approaches"][0]["miss_distance_m"])
+    print([c["shell_km"][0] for c in json.loads(recommend_orbit.remote(53.0))["data"]["candidates"]])

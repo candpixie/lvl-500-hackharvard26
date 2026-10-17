@@ -210,3 +210,47 @@ def test_compact_snapshot_answers_identically_to_raw(snap):
     for fn, args in [(core.shell_crowding, (550,)), (core.shell_crowding, (800, 98)),
                      (core.objects_near, (420, 51.6, 10)), (core.close_approaches, (400, 600, 10))]:
         assert json.dumps(fn(compact, *args), sort_keys=True) == json.dumps(fn(snap, *args), sort_keys=True)
+
+
+# ---------- recommend_orbit and time-in-shell ----------
+
+def test_time_fraction_physics():
+    # circular orbit: fully inside the shell holding its altitude, zero elsewhere
+    assert core._time_fraction([500], [500], 500, 550)[0] == 1.0
+    assert core._time_fraction([500], [500], 550, 600)[0] == 0.0
+    # an elliptical orbit spends its whole period between perigee and apogee: shell fractions sum to 1
+    total = sum(core._time_fraction([500], [1500], lo, lo + 50)[0] for lo in range(500, 1500, 50))
+    assert total == pytest.approx(1.0, abs=1e-9)
+    # and it lingers near apogee (Kepler): the top 50 km holds more time than the bottom 50 km
+    low = core._time_fraction([500], [1500], 500, 550)[0]
+    high = core._time_fraction([500], [1500], 1450, 1500)[0]
+    assert high > low
+
+
+def test_recommend_orbit_is_ranked_and_complete(snap):
+    res = core.recommend_orbit(snap, 53, 400, 1200, top_n=5)
+    assert res["ok"]
+    d = res["data"]
+    cand = d["candidates"]
+    assert len(cand) == 5 and [c["rank"] for c in cand] == [1, 2, 3, 4, 5]
+    assert [c["expected_objects"] for c in cand] == sorted(c["expected_objects"] for c in cand)
+    assert d["shells_ranked"] == 16 and d["busiest"]["rank"] == 16
+    assert d["busiest"]["expected_objects"] >= cand[-1]["expected_objects"]
+    assert all(400 <= c["shell_km"][0] < 1200 for c in cand)
+
+
+def test_recommend_orbit_never_reads_socrates(snap):
+    """The ranking must not touch SOCRATES, or the eval against SOCRATES would be circular."""
+    no_socrates = core.Snapshot(catalog=snap.catalog, socrates=snap.socrates.iloc[0:0], snapshot_id=snap.snapshot_id)
+    a = core.recommend_orbit(snap, 98, 400, 1200, top_n=10)
+    b = core.recommend_orbit(no_socrates, 98, 400, 1200, top_n=10)
+    assert json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+def test_recommend_orbit_validation_and_caveats(snap):
+    assert not core.recommend_orbit(snap, 200, 400, 1200)["ok"]
+    assert not core.recommend_orbit(snap, 53, 800, 400)["ok"]
+    assert not core.recommend_orbit(snap, 53, 100, 800)["ok"]
+    low = core.recommend_orbit(snap, 53, 200, 600, top_n=10)
+    assert any("drag" in c for c in low["caveats"])  # low shells look quiet partly because of drag
+    assert all("safe" not in c.lower().replace("not a guarantee of safety", "") for c in low["caveats"])
