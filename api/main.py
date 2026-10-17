@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
-from api.agent import ask, has_xai_key, imagine, speak, transcribe
+from api.agent import ask, ask_without_grok, has_xai_key, imagine, speak, transcribe
 from api.chalk import ping as chalk_ping, redact
 from api.data import (
     DEFAULT_DIMS_M,
@@ -22,9 +22,11 @@ from api.data import (
     warmup,
 )
 
-STATIC = Path(__file__).resolve().parent / "static"
+API_DIR = Path(__file__).resolve().parent
+STATIC = API_DIR / "static"
+ROOT = API_DIR.parent
 
-load_dotenv()
+load_dotenv(ROOT / ".env", override=True)
 
 
 @asynccontextmanager
@@ -49,8 +51,15 @@ class PlaceBody(BaseModel):
     count: int = Field(default=1, ge=1, le=1_000_000)
 
 
+class AskContext(BaseModel):
+    altitude_km: float | None = None
+    inclination_deg: float | None = None
+    selected_norad: int | None = None
+
+
 class AskBody(BaseModel):
     question: str
+    context: AskContext | None = None
 
 
 class SpeakBody(BaseModel):
@@ -124,12 +133,14 @@ def close_approaches(
 
 @app.post("/ask")
 def post_ask(body: AskBody):
-    if not has_xai_key():
-        raise HTTPException(503, "XAI_API_KEY is not set. Put it in .env to enable the agent.")
+    context = body.context.model_dump() if body.context else None
     try:
-        return ask(body.question)
+        if has_xai_key():
+            return ask(body.question, context=context)
+        return ask_without_grok(body.question, context)
     except Exception as exc:
-        raise HTTPException(502, f"Grok request failed: {redact(str(exc))}") from exc
+        label = "Grok" if has_xai_key() else "Ask"
+        raise HTTPException(502, f"{label} request failed: {redact(str(exc))}") from exc
 
 
 @app.post("/listen")
