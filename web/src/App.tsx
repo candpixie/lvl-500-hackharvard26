@@ -10,6 +10,7 @@ import {
   ShaderMaterial,
   Vector3,
   type MeshPhongMaterial,
+  type PerspectiveCamera,
 } from 'three'
 import '@fontsource-variable/jost'
 import '@fontsource-variable/geist'
@@ -22,7 +23,7 @@ import NeighborhoodCard from './NeighborhoodCard.tsx'
 import ObjectCard from './ObjectCard.tsx'
 import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
-import { orbitLine, ORBIT_COLOR } from './place.ts'
+import { GLOBE_RADIUS, orbitLine, ORBIT_COLOR } from './place.ts'
 import {
   exaggeratePoint,
   neighborhoodAround,
@@ -332,7 +333,7 @@ export default function App() {
       .showAtmosphere(true)
       .atmosphereColor('#d7e6f4')
       .atmosphereAltitude(0.15)
-      .pointOfView({ lat: 18, lng: 12, altitude: 1.65 * 1.25 }, 0)
+      .pointOfView({ lat: 18, lng: 12, altitude: 3.4 }, 0)
 
     const surface = globe.globeMaterial() as MeshPhongMaterial
     surface.color.set('#243444')
@@ -364,10 +365,11 @@ export default function App() {
     controls.autoRotate = false
     controls.autoRotateSpeed = 1
 
-    const HOME = { lat: 18, lng: 12, altitude: 1.65 }
+    const HOME = { lat: 18, lng: 12, altitude: 2.6 }
     const INTRO_MS = 2500
     const FLY_MS = 1400
-    const IDLE_MS = 10_000
+    const IDLE_MS = 4_000
+    const globeCenter = new Vector3()
     let userPaused = false
     let inSimView = false
     let spinHeldUntil = 0
@@ -383,11 +385,16 @@ export default function App() {
       window.clearTimeout(releaseTimer)
       releaseTimer = window.setTimeout(releaseSpin, ms)
     }
-    const pauseForUser = () => {
+    const holdForPointer = () => {
       userPaused = true
       controls.autoRotate = false
       window.clearTimeout(idleTimer)
+      idleTimer = 0
+    }
+    const armResume = () => {
+      window.clearTimeout(idleTimer)
       idleTimer = window.setTimeout(() => {
+        idleTimer = 0
         userPaused = false
         releaseSpin()
       }, IDLE_MS)
@@ -509,8 +516,38 @@ export default function App() {
     })
 
     const canvas = globe.renderer().domElement
+    const pointerOverGlobe = (event: { clientX: number; clientY: number }) => {
+      const cam = globe.camera() as PerspectiveCamera
+      cam.updateMatrixWorld()
+      const rect = canvas.getBoundingClientRect()
+      globeCenter.set(0, 0, 0).project(cam)
+      const cx = rect.left + (globeCenter.x * 0.5 + 0.5) * rect.width
+      const cy = rect.top + (-globeCenter.y * 0.5 + 0.5) * rect.height
+      const angular = Math.asin(Math.min(1, GLOBE_RADIUS / Math.max(cam.position.length(), 1)))
+      const fov = (cam.fov * Math.PI) / 180
+      const screenRadius = (Math.tan(angular) / Math.tan(fov / 2)) * (rect.height / 2)
+      return Math.hypot(event.clientX - cx, event.clientY - cy) <= screenRadius
+    }
+    const notePointer = (event: PointerEvent) => {
+      const dragging = event.buttons !== 0
+      if (pointerOverGlobe(event) || dragging) {
+        holdForPointer()
+        return
+      }
+      if (userPaused && idleTimer === 0) armResume()
+    }
+    const onWheel = (event: WheelEvent) => {
+      if (pointerOverGlobe(event)) {
+        holdForPointer()
+        return
+      }
+      userPaused = true
+      controls.autoRotate = false
+      armResume()
+    }
     let pickFrame = 0
     const onPointerMove = (event: PointerEvent) => {
+      notePointer(event)
       if (simLiveRef.current || !zoomed) return
       const rect = canvas.getBoundingClientRect()
       const x = event.clientX - rect.left
@@ -548,14 +585,15 @@ export default function App() {
         setFact(factsRef.current[index] ?? null)
       })
     }
-    const onPointerLeave = () => {
+    const onPointerLeave = (event: PointerEvent) => {
       cancelAnimationFrame(pickFrame)
       if (picked >= 0) clearPick()
+      if (event.buttons !== 0) return
+      if (userPaused && idleTimer === 0) armResume()
     }
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('pointerleave', onPointerLeave)
-    canvas.addEventListener('pointerenter', pauseForUser)
-    canvas.addEventListener('wheel', pauseForUser, { passive: true })
+    canvas.addEventListener('wheel', onWheel, { passive: true })
 
     const lockSimTarget = (positions: Float32Array, index: number) => {
       const [x, y, z] = exaggeratePoint(
@@ -693,11 +731,12 @@ export default function App() {
     const origin = new Vector3()
     const dir = new Vector3()
     const onDown = (event: PointerEvent) => {
-      pauseForUser()
+      if (pointerOverGlobe(event)) holdForPointer()
       downX = event.clientX
       downY = event.clientY
     }
     const onUp = (event: PointerEvent) => {
+      if (!pointerOverGlobe(event) && userPaused && idleTimer === 0) armResume()
       if (simLiveRef.current) return
       if (Math.hypot(event.clientX - downX, event.clientY - downY) > 5) return
       const catalog = catalogRef.current
@@ -725,8 +764,7 @@ export default function App() {
       window.clearTimeout(releaseTimer)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerleave', onPointerLeave)
-      canvas.removeEventListener('pointerenter', pauseForUser)
-      canvas.removeEventListener('wheel', pauseForUser)
+      canvas.removeEventListener('wheel', onWheel)
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointerup', onUp)
       cancelAnimationFrame(refit)
