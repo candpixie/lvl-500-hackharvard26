@@ -1,5 +1,5 @@
 {
- "source": "CelesTrak SATCAT (pub/satcat.csv), objects with no decay date, Earth-centered, mean altitude=(apogee+perigee)/2",
+ "source": "CelesTrak SATCAT, objects with no decay date, Earth-centered, mean altitude=(apogee+perigee)/2",
  "types": {
   "PAY": "payload",
   "DEB": "debris",

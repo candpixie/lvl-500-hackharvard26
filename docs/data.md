@@ -1,4 +1,4 @@
-# Data inventory: "where can I put my thing in space?" (Fri Oct 16, late)
+# Data inventory (Fri Oct 16, late)
 
 Checked live. Everything below is free, and none of it needs a key unless noted.
 
@@ -60,3 +60,11 @@ both objects, time of closest approach, miss distance (km), relative speed (km/s
 - This is the real-world answer key for any "crowding" score we make.
 - Filter out pairs from the same constellation (Starlink vs Starlink pairs show probability 1.0,
   likely formation flying or a modeling artifact). Check the SOCRATES format page before trusting MAX_PROB.
+
+## Update: frontend-ready files (`pipeline/build_objects.py`)
+- `data/out/objects.json`: 20,038 objects (16,753 satellites, 2,679 debris, 12 rocket bodies,
+  594 unidentified), each with orbit elements plus catalog info. Not committed (14 MB).
+- `data/out/close_approaches.json`: 500 closest predicted approaches. Removed same-constellation
+  pairs and objects with almost no relative speed (they fly together, like a spacecraft and its own
+  launch debris, not near misses).
+- Closest real one this week: NuSat-47 vs Fengyun-1C debris, 12 m apart, 14.5 km/s, Oct 22.
