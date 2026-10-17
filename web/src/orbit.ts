@@ -1,3 +1,6 @@
+/** Drawn constellation points. Counts above this stay in the score and the legend. */
+export const RING_DRAW_CAP = 2000
+
 export interface OrbitCounts {
   satellite: number
   debris: number
@@ -33,9 +36,10 @@ export type WorkerOut =
       kinds: Float32Array
       epoch: string
       facts: ObjectFact[]
-      timeMs: number
     }
-  | { kind: 'positions'; positions: Float32Array; timeMs: number }
+  | { kind: 'positions'; positions: Float32Array; ring: Float32Array; simMs: number; rate: number }
   | { kind: 'error'; message: string }
 
-export type WorkerIn = { kind: 'rate'; rate: number }
+export type WorkerIn =
+  | { kind: 'rate'; rate: number }
+  | { kind: 'ring'; altKm: number; incDeg: number; count: number }

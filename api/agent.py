@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import time
 from typing import Any
 
 import httpx
@@ -37,6 +39,26 @@ STT_MODEL = os.getenv("XAI_STT_MODEL", "grok-voice-transcribe-2.0")
 IMAGINE_MODEL = os.getenv("XAI_IMAGINE_MODEL", "grok-imagine-image-2.0")
 MAX_TOOL_ROUNDS = 6
 
+
+def _log(message: str) -> None:
+    """One line on the server terminal, flushed so it shows up while the request is still running."""
+    print(f"{time.strftime('%H:%M:%S')}  {message}", file=sys.stderr, flush=True)
+
+
+def _tool_line(result: Any) -> str:
+    if not isinstance(result, dict):
+        return "ok"
+    if result.get("error"):
+        return f"error  {result['error']}"
+    focus = result.get("focus")
+    if not isinstance(focus, dict) or focus.get("altitude_km") is None:
+        return "ok"
+    line = f"ok  {focus['altitude_km']:.0f} km"
+    inc = focus.get("inclination_deg")
+    if isinstance(inc, (int, float)):
+        line += f"  {inc:.0f}°"
+    return line
+
 SYSTEM_BASE = """You are the Orbit Payback voice. You help someone pick a low Earth orbit that does the least harm.
 
 Rules:
@@ -48,6 +70,10 @@ Rules:
 - Do not frame SpaceX as a villain. Neutral: where to build safely.
 - Keep the spoken answer to about 3 short sentences.
 - Default satellite size is 4 x 2 x 1 meters unless the user says otherwise.
+- Out of scope: the tools only cover tracked objects between 200 and 2000 km (low Earth orbit). For anything outside
+  that (geostationary or other high orbits, the Moon or planets, launch or weather questions, anything unrelated to
+  orbit), call NO tool. Say in one sentence that it is outside what you cover, and offer a low Earth orbit question
+  you can answer. Do not guess numbers. Greetings, thanks and questions about what a word here means need no tool either.
 """
 
 SYSTEM_CHALK = SYSTEM_BASE + """
@@ -73,9 +99,14 @@ SYSTEM_REMOTE = """
 Deployed Chalk functions, when CHALK_REMOTE_FUNCTIONS is on:
   shell_crowding for a 50 km shell,
   objects_near for who shares an altitude and inclination,
-  close_approaches for SOCRATES rows in a band (200 km up to but not including 2000 km; use 200 and 1999 for the closest this week).
+  close_approaches for SOCRATES rows in a band (200 km up to but not including 2000 km; use 200 and 1999 for the closest this week),
+  recommend_orbit for "where should I put a satellite" when the user gives or implies an inclination or a mission
+  (ISS-like 51.6, Starlink-like 53, sun-synchronous about 98, polar about 90, equatorial 0). It ranks 50 km shells,
+  quietest first. Quiet means few tracked objects, never safe.
 Prefer those over get_shell_crowding and get_close_approaches.
-rank_shells and place_satellites stay local until recommend_orbit exists. Use them for where to put satellites and for a specific altitude.
+Call only one tool for one job: never call a Chalk function and its local twin for the same question.
+rank_shells and place_satellites stay local. Use rank_shells when the user gives a satellite count or size and no orbit
+or mission, and place_satellites for a specific altitude with a count.
 If a Chalk function returns ok=false or fallback=true, use the local tool with the same job.
 """
 
@@ -128,6 +159,25 @@ REMOTE_TOOLS = [
                 "limit": {"type": "integer"},
             },
             "required": ["min_altitude_km", "max_altitude_km"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "recommend_orbit",
+        "description": (
+            "Chalk. Ranks 50 km shells for a mission inclination, quietest first (fewest tracked objects expected "
+            "at a similar inclination). Not a safety guarantee. Defaults: 400 to 1200 km, top 5, 10 degree band."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "inclination_deg": {"type": "number"},
+                "min_altitude_km": {"type": "number"},
+                "max_altitude_km": {"type": "number"},
+                "top_n": {"type": "integer"},
+                "inclination_band_deg": {"type": "number"},
+            },
+            "required": ["inclination_deg"],
         },
     },
 ]
@@ -423,6 +473,13 @@ def _focus_from_remote(name: str, result: Any) -> dict | None:
                 "altitude_km": alt,
                 "inclination_deg": query.get("inclination_deg", DEFAULT_INC_DEG),
             }
+    if name == "recommend_orbit":
+        cands = data.get("candidates")
+        query = data.get("query") if isinstance(data.get("query"), dict) else {}
+        if isinstance(cands, list) and cands and isinstance(cands[0].get("shell_km"), list):
+            lo, hi = cands[0]["shell_km"]
+            return {"altitude_km": (float(lo) + float(hi)) / 2,
+                    "inclination_deg": query.get("inclination_deg", DEFAULT_INC_DEG)}
     if name == "close_approaches":
         rows = data.get("approaches")
         if isinstance(rows, list) and rows and isinstance(rows[0], dict):
@@ -709,6 +766,7 @@ def ask(question: str, history: list | None = None, context: dict | None = None)
     tools = _tools(use_chalk, use_remote)
     tool_calls: list[dict] = []
     first_choice: Any = {"type": "function", "name": "ask_chalk"} if use_chalk else "auto"
+    _log(f"ask   {question.strip()}")
     response = client.responses.create(
         model=ASK_MODEL,
         input=_input_messages(_system(use_chalk, use_remote), question, history, context),
@@ -725,11 +783,13 @@ def ask(question: str, history: list | None = None, context: dict | None = None)
             args = json.loads(item.arguments or "{}")
             if item.name == "ask_chalk" and not args.get("question"):
                 args["question"] = question
+            _log(f"tool  {item.name}")
             try:
                 result = _run_tool(item.name, args)
             except Exception as exc:
                 chalk_tool = item.name == "ask_chalk" or item.name in REMOTE_FUNCTIONS
                 result = {"error": redact(str(exc)), "fallback": chalk_tool}
+            _log(f"tool  {item.name}  {_tool_line(result)}")
             tool_calls.append({"name": item.name, "arguments": args, "result": result})
             outputs.append({
                 "type": "function_call_output",
@@ -756,7 +816,9 @@ def ask(question: str, history: list | None = None, context: dict | None = None)
     if not answer:
         answer = "I could not get a number-backed answer. Try asking about a shell or a count."
     focus = _focus_from_calls(tool_calls)
-    return _pack_ask(answer, focus, tool_calls, _reasoner(tool_calls))
+    reasoner = _reasoner(tool_calls)
+    _log(f"done  reasoner {reasoner}  focus {focus}")
+    return _pack_ask(answer, focus, tool_calls, reasoner)
 
 
 def run_agent(question: str, history: list | None = None, context: dict | None = None) -> dict:

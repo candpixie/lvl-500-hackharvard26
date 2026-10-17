@@ -31,17 +31,88 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.legend-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+
+.clock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.clock button {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  color: #c9d6e3;
+  background: transparent;
+  border: 1px solid rgba(201, 214, 227, 0.28);
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.clock button[aria-pressed='true'] {
+  color: #05070b;
+  background: #e7f27a;
+  border-color: #e7f27a;
+}
+
+.clock-time {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: rgba(201, 214, 227, 0.72);
+}
+
 .hud {
   position: fixed;
   top: 20px;
   left: 24px;
   z-index: 2;
   width: min(280px, calc(100vw - 48px));
-  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 140px);
   margin: 0;
   overflow: auto;
   pointer-events: auto;
   user-select: none;
+}
+
+/* Only the thumb shows: transparent track, no arrows. Width needs the webkit rules;
+   Firefox has no width control, so it gets the standard thin version. */
+.hud::-webkit-scrollbar {
+  width: 8px;
+}
+
+.hud::-webkit-scrollbar-track,
+.hud::-webkit-scrollbar-button,
+.hud::-webkit-scrollbar-corner {
+  background: transparent;
+  display: none;
+}
+
+.hud::-webkit-scrollbar-thumb {
+  background: rgba(201, 214, 227, 0.65);
+  border-radius: 4px;
+}
+
+.hud::-webkit-scrollbar-thumb:hover {
+  background: rgba(231, 242, 122, 0.8);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .hud {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(201, 214, 227, 0.65) transparent;
+  }
 }
 
 .hud::before {
@@ -115,7 +186,7 @@ h1 {
 }
 
 .legend {
-  margin: 8px 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
@@ -135,6 +206,11 @@ h1 {
 .swatch {
   width: 8px;
   height: 8px;
+}
+
+.swatch-constellation {
+  background: #67e8f9;
+  border-radius: 50%;
 }
 
 .legend-count {
@@ -282,80 +358,107 @@ input.place-input {
   gap: 2px;
 }
 
-.saved-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.saved-remove {
-  border: 0;
-  background: transparent;
-  color: rgba(201, 214, 227, 0.55);
-  cursor: pointer;
+.save-name {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 8px 10px;
   font: inherit;
-  font-size: 14px;
-  line-height: 1;
-  padding: 4px 6px;
-}
-
-.saved-remove:hover {
-  color: #e7f27a;
-}
-
-.clock-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  margin-top: 8px;
-}
-
-.clock-readout {
-  margin: 0;
-}
-
-.rate-row {
-  display: flex;
-  gap: 4px;
-}
-
-.rate-row button {
-  font: inherit;
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 12px;
   color: #c9d6e3;
-  background: transparent;
+  background: rgba(5, 7, 11, 0.55);
   border: 1px solid rgba(201, 214, 227, 0.28);
-  padding: 2px 6px;
-  cursor: pointer;
 }
 
-.rate-row button[aria-pressed='true'] {
-  color: #05070b;
-  background: #e7f27a;
-  border-color: #e7f27a;
+.save-name::placeholder {
+  color: rgba(201, 214, 227, 0.4);
 }
 
-.saved-row {
+.saved-item {
   display: grid;
-  grid-template-columns: 1.4fr 0.7fr 1.3fr 0.9fr;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-  padding: 6px 0;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid rgba(201, 214, 227, 0.12);
+}
+
+.saved-head {
+  display: grid;
+  grid-template-columns: 1fr auto 1em;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 0;
   text-align: left;
   font: inherit;
   font-size: 12px;
   color: #c9d6e3;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid rgba(201, 214, 227, 0.12);
   cursor: pointer;
 }
 
-.saved-row:hover {
+.saved-head:hover,
+.saved-head[aria-expanded='true'] {
   color: #e7f27a;
+}
+
+.saved-remove {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  color: rgba(201, 214, 227, 0.62);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.saved-remove:hover {
+  color: #e7f27a;
+}
+
+.saved-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-details {
+  grid-column: 1 / -1;
+  padding: 0 0 8px;
+}
+
+.saved-details dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 12px;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.saved-details dt {
+  color: rgba(201, 214, 227, 0.62);
+}
+
+.saved-details dd {
+  margin: 0;
+  text-align: right;
+  color: #c9d6e3;
+}
+
+.saved-view {
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  color: #e7f27a;
+  background: transparent;
+  border: 1px solid rgba(231, 242, 122, 0.45);
+  cursor: pointer;
 }
 
 .field {
@@ -369,6 +472,11 @@ input.place-input {
   justify-content: space-between;
   gap: 12px;
   color: rgba(201, 214, 227, 0.62);
+}
+
+.field-label.step-size {
+  justify-content: flex-start;
+  gap: 6px;
 }
 
 .field-label span:last-child {
@@ -653,6 +761,14 @@ input.place-input {
   letter-spacing: 0;
   text-transform: none;
   font-size: 13px;
+}
+
+.quieter-note {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: rgba(201, 214, 227, 0.55);
 }
 
 .shell .source {
