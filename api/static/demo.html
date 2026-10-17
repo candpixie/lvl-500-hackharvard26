@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Orbit Payback — agent</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { font: 16px/1.45 ui-sans-serif, system-ui; margin: 0; background: #0b1020; color: #e8eefc; }
+    main { max-width: 42rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    p.sub { color: #9aa7c7; margin: 0 0 1.25rem; }
+    textarea, button, input { font: inherit; }
+    textarea { width: 100%; min-height: 5rem; box-sizing: border-box; padding: .75rem; border-radius: 8px;
+      border: 1px solid #2a3558; background: #121a33; color: inherit; }
+    .row { display: flex; gap: .5rem; margin: .75rem 0 1.25rem; flex-wrap: wrap; }
+    button { background: #4c7dff; color: #fff; border: 0; border-radius: 8px; padding: .55rem .9rem; cursor: pointer; }
+    button.ghost { background: #1b2444; color: #c9d4f0; }
+    button:disabled { opacity: .5; cursor: wait; }
+    .chips button { font-size: .85rem; }
+    #answer { white-space: pre-wrap; background: #121a33; border: 1px solid #2a3558; border-radius: 8px; padding: 1rem; min-height: 4rem; }
+    #meta, #focus { color: #9aa7c7; font-size: .9rem; margin-top: .75rem; }
+    audio { width: 100%; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Orbit Payback agent</h1>
+    <p class="sub">Ask with real CelesTrak numbers. Voice uses the Grok TTS API. Globe hook: <code>focusOrbit</code>.</p>
+    <div class="chips row">
+      <button class="ghost" type="button" data-q="Where should I put 1,000 four-meter satellites?">1,000 sats</button>
+      <button class="ghost" type="button" data-q="What happens if SpaceX puts a million satellites at 900 km?">1M at 900 km</button>
+      <button class="ghost" type="button" data-q="Why is 800 km so bad?">Why 800 km</button>
+      <button class="ghost" type="button" data-q="What's the closest near miss this week?">Closest near miss</button>
+    </div>
+    <textarea id="q" placeholder="Where should I put 1,000 four-meter satellites?"></textarea>
+    <div class="row">
+      <button id="ask" type="button">Ask</button>
+      <button id="voice" class="ghost" type="button">Ask + speak</button>
+    </div>
+    <div id="answer">Waiting for a question.</div>
+    <div id="focus"></div>
+    <div id="meta"></div>
+    <audio id="player" controls hidden></audio>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const api = "";
+    document.querySelectorAll("[data-q]").forEach((b) => {
+      b.onclick = () => { $("q").value = b.dataset.q; };
+    });
+
+    async function run(speak) {
+      const question = $("q").value.trim();
+      if (!question) return;
+      $("ask").disabled = $("voice").disabled = true;
+      $("answer").textContent = "Calling Grok + our orbit tools…";
+      $("focus").textContent = "";
+      $("meta").textContent = "";
+      $("player").hidden = true;
+      try {
+        const res = await fetch(api + "/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || res.statusText);
+        $("answer").textContent = data.answer;
+        if (data.focus) {
+          $("focus").textContent = `focusOrbit(${JSON.stringify(data.focus)})`;
+          window.dispatchEvent(new CustomEvent("focusOrbit", { detail: data.focus }));
+        }
+        const names = (data.tool_calls || []).map((c) => c.name);
+        $("meta").textContent = names.length
+          ? "Sources: " + names.join(", ") + " — tracked objects only, lower bound."
+          : "No tools called.";
+        if (speak && data.answer) {
+          const audioRes = await fetch(api + "/speak", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: data.answer }),
+          });
+          if (!audioRes.ok) throw new Error("Voice failed: " + audioRes.status);
+          const blob = await audioRes.blob();
+          $("player").src = URL.createObjectURL(blob);
+          $("player").hidden = false;
+          $("player").play();
+        }
+      } catch (err) {
+        $("answer").textContent = String(err);
+      } finally {
+        $("ask").disabled = $("voice").disabled = false;
+      }
+    }
+    $("ask").onclick = () => run(false);
+    $("voice").onclick = () => run(true);
+  </script>
+</body>
+</html>

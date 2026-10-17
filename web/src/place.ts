@@ -4,11 +4,12 @@ export const ORBIT_COLOR = '#E7F27A'
 
 const STEPS = 240
 
-export function orbitLine(altitudeKm: number, inclinationDeg: number, raanDeg = 28) {
+export function orbitLine(altitudeKm: number, inclinationDeg: number, raanDeg = 28, exaggerate = 1) {
   const positions = new Float32Array((STEPS + 1) * 3)
   const inc = (inclinationDeg * Math.PI) / 180
   const raan = (raanDeg * Math.PI) / 180
-  const radius = GLOBE_RADIUS * (1 + altitudeKm / EARTH_RADIUS_KM)
+  const realRel = Math.max(altitudeKm / EARTH_RADIUS_KM, 0)
+  const radius = GLOBE_RADIUS * (1 + Math.min(realRel, 0.5) * exaggerate)
   const cosI = Math.cos(inc)
   const sinI = Math.sin(inc)
   const cosO = Math.cos(raan)
