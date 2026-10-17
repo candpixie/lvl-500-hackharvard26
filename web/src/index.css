@@ -86,6 +86,35 @@ body {
   user-select: none;
 }
 
+/* Only the thumb shows: transparent track, no arrows. Width needs the webkit rules;
+   Firefox has no width control, so it gets the standard thin version. */
+.hud::-webkit-scrollbar {
+  width: 8px;
+}
+
+.hud::-webkit-scrollbar-track,
+.hud::-webkit-scrollbar-button,
+.hud::-webkit-scrollbar-corner {
+  background: transparent;
+  display: none;
+}
+
+.hud::-webkit-scrollbar-thumb {
+  background: rgba(201, 214, 227, 0.65);
+  border-radius: 4px;
+}
+
+.hud::-webkit-scrollbar-thumb:hover {
+  background: rgba(231, 242, 122, 0.8);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .hud {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(201, 214, 227, 0.65) transparent;
+  }
+}
+
 .hud::before {
   content: '';
   position: fixed;
