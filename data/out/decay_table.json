@@ -1,0 +1,145 @@
+{
+ "source": "approximate rule-of-thumb anchors, moderate solar activity; depends on solar activity and satellite shape by about 10x, verify before a slide",
+ "rows": [
+  {
+   "alt_km": 300,
+   "years": 0.1
+  },
+  {
+   "alt_km": 350,
+   "years": 0.32
+  },
+  {
+   "alt_km": 400,
+   "years": 1.0
+  },
+  {
+   "alt_km": 450,
+   "years": 2.83
+  },
+  {
+   "alt_km": 500,
+   "years": 8.0
+  },
+  {
+   "alt_km": 550,
+   "years": 14.14
+  },
+  {
+   "alt_km": 600,
+   "years": 25.0
+  },
+  {
+   "alt_km": 650,
+   "years": 50.0
+  },
+  {
+   "alt_km": 700,
+   "years": 100.0
+  },
+  {
+   "alt_km": 750,
+   "years": 141.42
+  },
+  {
+   "alt_km": 800,
+   "years": 200.0
+  },
+  {
+   "alt_km": 850,
+   "years": 316.23
+  },
+  {
+   "alt_km": 900,
+   "years": 500.0
+  },
+  {
+   "alt_km": 950,
+   "years": 707.11
+  },
+  {
+   "alt_km": 1000,
+   "years": 1000.0
+  },
+  {
+   "alt_km": 1050,
+   "years": 1316.07
+  },
+  {
+   "alt_km": 1100,
+   "years": 1732.05
+  },
+  {
+   "alt_km": 1150,
+   "years": 2279.51
+  },
+  {
+   "alt_km": 1200,
+   "years": 3000.0
+  },
+  {
+   "alt_km": 1250,
+   "years": 3532.78
+  },
+  {
+   "alt_km": 1300,
+   "years": 4160.17
+  },
+  {
+   "alt_km": 1350,
+   "years": 4898.98
+  },
+  {
+   "alt_km": 1400,
+   "years": 5769.0
+  },
+  {
+   "alt_km": 1450,
+   "years": 6793.53
+  },
+  {
+   "alt_km": 1500,
+   "years": 8000.0
+  },
+  {
+   "alt_km": 1550,
+   "years": 8767.67
+  },
+  {
+   "alt_km": 1600,
+   "years": 9609.0
+  },
+  {
+   "alt_km": 1650,
+   "years": 10531.06
+  },
+  {
+   "alt_km": 1700,
+   "years": 11541.6
+  },
+  {
+   "alt_km": 1750,
+   "years": 12649.11
+  },
+  {
+   "alt_km": 1800,
+   "years": 13862.9
+  },
+  {
+   "alt_km": 1850,
+   "years": 15193.16
+  },
+  {
+   "alt_km": 1900,
+   "years": 16651.06
+  },
+  {
+   "alt_km": 1950,
+   "years": 18248.87
+  },
+  {
+   "alt_km": 2000,
+   "years": 20000.0
+  }
+ ]
+}

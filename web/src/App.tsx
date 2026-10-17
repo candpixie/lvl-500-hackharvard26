@@ -1,15 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
 import Globe from 'globe.gl'
-import { BufferGeometry, Float32BufferAttribute, Points, ShaderMaterial, type MeshPhongMaterial } from 'three'
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Line,
+  LineBasicMaterial,
+  Points,
+  ShaderMaterial,
+  type MeshPhongMaterial,
+} from 'three'
 import '@fontsource/ibm-plex-sans/400.css'
 import '@fontsource/ibm-plex-sans/500.css'
 import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
+import AgentPanel from './AgentPanel.tsx'
+import type { FocusOrbit } from './events.ts'
 import { createFleet, type Fleet } from './fleet.ts'
 import ObjectCard from './ObjectCard.tsx'
 import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
 import { screenNearest } from './pick.ts'
 import PlacePanel from './PlacePanel.tsx'
+import { orbitLine, ORBIT_COLOR } from './place.ts'
 import { shellBounds, type ShellRow } from './shells.ts'
 
 const LEGEND: { key: keyof OrbitCounts; label: string; color: string }[] = [
@@ -173,6 +184,7 @@ export default function App() {
   const hostRef = useRef<HTMLDivElement>(null)
   const applyShellRef = useRef<(altitudeKm: number) => void>(() => {})
   const debrisRef = useRef<(on: boolean) => void>(() => {})
+  const flyRef = useRef<(focus: FocusOrbit) => void>(() => {})
   const [status, setStatus] = useState<Status>({ state: 'loading' })
   const [altitude, setAltitude] = useState(START_ALTITUDE)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
@@ -275,6 +287,22 @@ export default function App() {
     debrisRef.current = (on) => {
       const value = on ? 1 : 0
       for (const material of materials) material.uniforms.uDebrisOnly.value = value
+    }
+
+    let orbit: Line | null = null
+    const orbitMaterial = new LineBasicMaterial({ color: ORBIT_COLOR, transparent: true, opacity: 0.9 })
+    flyRef.current = (focus) => {
+      const { positions } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
+      if (orbit) {
+        globe.scene().remove(orbit)
+        orbit.geometry.dispose()
+      }
+      const geometry = new BufferGeometry()
+      geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+      orbit = new Line(geometry, orbitMaterial)
+      globe.scene().add(orbit)
+      const lat = Math.max(-55, Math.min(55, 90 - focus.inclination_deg))
+      globe.pointOfView({ lat, lng: 20, altitude: 1.45 }, 1400)
     }
 
     globe.renderer().domElement.addEventListener('webglcontextlost', (event: Event) => {
@@ -420,11 +448,14 @@ export default function App() {
       canvas.removeEventListener('pointerleave', onPointerLeave)
       cancelAnimationFrame(refit)
       resizeObserver.disconnect()
+      flyRef.current = () => {}
       window.removeEventListener('resize', fit)
       window.visualViewport?.removeEventListener('resize', fit)
       worker.terminate()
       dots.dispose()
       models.dispose()
+      orbitMaterial.dispose()
+      orbit?.geometry.dispose()
       cloud?.geometry.dispose()
       fleet?.dispose()
       globe._destructor()
@@ -476,7 +507,7 @@ export default function App() {
     <>
       <div ref={hostRef} className="viewport" />
       <aside className="hud">
-        <p className="kicker">Orbit crowding</p>
+        <p className="kicker">Orbit Payback</p>
         <h1>How crowded is this altitude?</h1>
         <p className="dek">{close ? 'Point at a satellite.' : 'That shell stays bright.'}</p>
         {close && <p className="scale-note">Enlarged, not to scale</p>}
@@ -500,6 +531,12 @@ export default function App() {
         <p className="source">CelesTrak GP</p>
       </aside>
       {close && fact && <ObjectCard fact={fact} liveKm={liveKm} />}
+      <AgentPanel
+        onFocus={(focus) => {
+          setAltitude(Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10)))
+          flyRef.current(focus)
+        }}
+      />
       {overlay}
     </>
   )
