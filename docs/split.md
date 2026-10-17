@@ -1,5 +1,8 @@
 # Work split for two people (Sat Oct 17, written 12:34 PM EDT)
 
+> **Status update (Sat afternoon):** parts of this document are superseded. The team built `api/` (FastAPI, port 8000, `/ask`), the Grok loop (`api/agent.py`, importable as `from agent import run_agent`), and a placement model (`pipeline/orbit_data.py`, `pipeline/scoring.py`). The "Python server in `server/` on port 8787" and `/api/ask` shapes below were an earlier proposal and are withdrawn; use `docs/chalk-contract.md` and `docs/chalk-teammates.md`. The Chalk functions section still applies (see `docs/api.md`).
+
+
 Gates: Sat 2 PM everything connected end to end (even if ugly), Sat 6 PM feature freeze + backup video, Sun 8 AM Devpost.
 Person A = Chalk side. Person B = Grok and web side. Names: A = ____, B = ____.
 

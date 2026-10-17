@@ -1,5 +1,8 @@
 # Handoff: read this first (Sat Oct 17, 12:45 PM EDT)
 
+> **Status update (Sat afternoon):** parts of this document are superseded. The team built `api/` (FastAPI, port 8000, `/ask`), the Grok loop (`api/agent.py`, importable as `from agent import run_agent`), and a placement model (`pipeline/orbit_data.py`, `pipeline/scoring.py`). The "Python server in `server/` on port 8787" and `/api/ask` shapes below were an earlier proposal and are withdrawn; use `docs/chalk-contract.md` and `docs/chalk-teammates.md`. The Chalk functions section still applies (see `docs/api.md`).
+
+
 This is the one document that explains the project, what exists, what we decided, and what to do next. `chalkclaude.md` (repo root) is the same material in a terse form for Claude. It is named `chalkclaude.md` so it does not overwrite anyone's own `CLAUDE.md`; Claude Code only auto-loads a file named `CLAUDE.md`, so add `@chalkclaude.md` to your own `CLAUDE.md` or ask Claude to read it. `docs/split.md` is the two-person work split. `docs/data.md` is the data inventory. `README.md` is the pitch.
 
 ## 1. What we are building
