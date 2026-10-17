@@ -413,6 +413,17 @@ export default function PlacePanel({
                         {open ? '▾' : '▸'}
                       </span>
                     </button>
+                    <button
+                      type="button"
+                      className="saved-remove"
+                      aria-label={`Remove ${row.name}`}
+                      onClick={() => {
+                        setSaved((rows) => rows.filter((item) => item.id !== row.id))
+                        if (open) setOpenSaveId(null)
+                      }}
+                    >
+                      ×
+                    </button>
                     {open && (
                       <div className="saved-details">
                         <dl>

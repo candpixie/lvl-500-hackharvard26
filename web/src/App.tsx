@@ -7,9 +7,11 @@ import {
   Line,
   LineBasicMaterial,
   Points,
+  PointsMaterial,
   ShaderMaterial,
   Vector3,
   type MeshPhongMaterial,
+  type PerspectiveCamera,
   type SpriteMaterial,
 } from 'three'
 import '@fontsource-variable/jost'
@@ -21,9 +23,9 @@ import { imagineGrok, neighborhoodPrompt } from './events.ts'
 import { createFleet, type Fleet } from './fleet.ts'
 import NeighborhoodCard from './NeighborhoodCard.tsx'
 import ObjectCard from './ObjectCard.tsx'
-import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
+import { RING_DRAW_CAP, type ObjectFact, type OrbitCounts, type WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
-import { goldStarSprite, orbitLine, ORBIT_COLOR } from './place.ts'
+import { GLOBE_RADIUS, goldStarSprite, orbitLine, ORBIT_COLOR } from './place.ts'
 import {
   exaggeratePoint,
   neighborhoodAround,
@@ -246,6 +248,13 @@ export default function App() {
   const [shells, setShells] = useState<ShellRow[] | null>(null)
   const [shellError, setShellError] = useState<string | null>(null)
   const [debrisOnly, setDebrisOnly] = useState(false)
+  const [clockRate, setClockRate] = useState<1 | 60 | 600>(1)
+  const [simLabel, setSimLabel] = useState('')
+  const workerRef = useRef<Worker | null>(null)
+  const fastRef = useRef(false)
+  const controlsRef = useRef<{ autoRotate: boolean } | null>(null)
+  const releaseSpinRef = useRef<() => void>(() => {})
+  fastRef.current = clockRate > 1
   const [epoch, setEpoch] = useState('')
   const [close, setClose] = useState(false)
   const [fact, setFact] = useState<ObjectFact | null>(null)
@@ -280,6 +289,7 @@ export default function App() {
       return
     }
     simLiveRef.current = true
+    setClockRate(1)
     setSim({ phase: 'live', hood: viz.hood, image: null })
     enterSimRef.current(viz.hood.pickedIndex)
   }
@@ -287,6 +297,7 @@ export default function App() {
   function startLiveSim() {
     if (!sim) return
     simLiveRef.current = true
+    setClockRate(1)
     setSim({ ...sim, phase: 'live' })
     setAltitude(Math.round(sim.hood.picked.alt_km / 10) * 10)
     enterSimRef.current(sim.hood.pickedIndex)
@@ -340,9 +351,9 @@ export default function App() {
     globe
       .backgroundColor('#05070B')
       .showAtmosphere(true)
-      .atmosphereColor('#9bb8d4')
-      .atmosphereAltitude(0.11)
-      .pointOfView({ lat: 18, lng: 12, altitude: 1.65 }, 0)
+      .atmosphereColor('#d7e6f4')
+      .atmosphereAltitude(0.15)
+      .pointOfView({ lat: 18, lng: 12, altitude: 3.4 }, 0)
 
     const surface = globe.globeMaterial() as MeshPhongMaterial
     surface.color.set('#243444')
@@ -371,6 +382,50 @@ export default function App() {
     controls.zoomSpeed = 0.7
     controls.minDistance = 160
     controls.maxDistance = 2200
+    controls.autoRotate = false
+    controls.autoRotateSpeed = 1
+    controlsRef.current = controls
+
+    const HOME = { lat: 18, lng: 12, altitude: 2.6 }
+    const INTRO_MS = 2500
+    const FLY_MS = 1400
+    const IDLE_MS = 4_000
+    const globeCenter = new Vector3()
+    let userPaused = false
+    let inSimView = false
+    let spinHeldUntil = 0
+    let idleTimer = 0
+    let releaseTimer = 0
+    const canSpin = () =>
+      !fastRef.current && !userPaused && !inSimView && !simLiveRef.current && performance.now() >= spinHeldUntil
+    const releaseSpin = () => {
+      if (canSpin()) controls.autoRotate = true
+    }
+    releaseSpinRef.current = releaseSpin
+    const holdSpin = (ms: number) => {
+      controls.autoRotate = false
+      spinHeldUntil = performance.now() + ms
+      window.clearTimeout(releaseTimer)
+      releaseTimer = window.setTimeout(releaseSpin, ms)
+    }
+    const holdForPointer = () => {
+      userPaused = true
+      controls.autoRotate = false
+      window.clearTimeout(idleTimer)
+      idleTimer = 0
+    }
+    const armResume = () => {
+      window.clearTimeout(idleTimer)
+      idleTimer = window.setTimeout(() => {
+        idleTimer = 0
+        userPaused = false
+        releaseSpin()
+      }, IDLE_MS)
+    }
+    requestAnimationFrame(() => {
+      globe.pointOfView(HOME, INTRO_MS)
+    })
+    holdSpin(INTRO_MS)
 
     const dots = pointMaterial(START_ALTITUDE)
     const models = fleetMaterial(START_ALTITUDE)
@@ -414,6 +469,7 @@ export default function App() {
     let pinOn = false
     flyRef.current = (focus, opts = {}) => {
       if (simLiveRef.current) return
+      holdSpin(FLY_MS)
       const { positions, marker } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
       if (orbit) {
         globe.scene().remove(orbit)
@@ -467,8 +523,25 @@ export default function App() {
       return nativeUpdate()
     }
 
+    const ringPositions = new Float32Array(RING_DRAW_CAP * 3)
+    const ringGeometry = new BufferGeometry()
+    ringGeometry.setAttribute('position', new Float32BufferAttribute(ringPositions, 3))
+    ringGeometry.setDrawRange(0, 0)
+    const ringMaterial = new PointsMaterial({
+      color: '#67e8f9',
+      size: 4,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    })
+    const ringCloud = new Points(ringGeometry, ringMaterial)
+    ringCloud.frustumCulled = false
+    globe.scene().add(ringCloud)
+
     const showModels = (on: boolean) => {
       if (cloud) cloud.visible = !on
+      ringCloud.visible = !on
       fleet?.setVisible(on)
       for (const material of materials) material.uniforms.uHideOutside.value = on ? 1 : 0
       if (on && positionsRef.current) fleet?.update(positionsRef.current)
@@ -476,6 +549,7 @@ export default function App() {
 
     const hideForSim = () => {
       if (cloud) cloud.visible = false
+      ringCloud.visible = false
       fleet?.setVisible(false)
       if (orbit) orbit.visible = false
       star.visible = false
@@ -527,8 +601,38 @@ export default function App() {
     })
 
     const canvas = globe.renderer().domElement
+    const pointerOverGlobe = (event: { clientX: number; clientY: number }) => {
+      const cam = globe.camera() as PerspectiveCamera
+      cam.updateMatrixWorld()
+      const rect = canvas.getBoundingClientRect()
+      globeCenter.set(0, 0, 0).project(cam)
+      const cx = rect.left + (globeCenter.x * 0.5 + 0.5) * rect.width
+      const cy = rect.top + (-globeCenter.y * 0.5 + 0.5) * rect.height
+      const angular = Math.asin(Math.min(1, GLOBE_RADIUS / Math.max(cam.position.length(), 1)))
+      const fov = (cam.fov * Math.PI) / 180
+      const screenRadius = (Math.tan(angular) / Math.tan(fov / 2)) * (rect.height / 2)
+      return Math.hypot(event.clientX - cx, event.clientY - cy) <= screenRadius
+    }
+    const notePointer = (event: PointerEvent) => {
+      const dragging = event.buttons !== 0
+      if (pointerOverGlobe(event) || dragging) {
+        holdForPointer()
+        return
+      }
+      if (userPaused && idleTimer === 0) armResume()
+    }
+    const onWheel = (event: WheelEvent) => {
+      if (pointerOverGlobe(event)) {
+        holdForPointer()
+        return
+      }
+      userPaused = true
+      controls.autoRotate = false
+      armResume()
+    }
     let pickFrame = 0
     const onPointerMove = (event: PointerEvent) => {
+      notePointer(event)
       if (simLiveRef.current || !zoomed) return
       const rect = canvas.getBoundingClientRect()
       const x = event.clientX - rect.left
@@ -568,12 +672,15 @@ export default function App() {
         setSelectedNorad(nextFact?.norad ?? null)
       })
     }
-    const onPointerLeave = () => {
+    const onPointerLeave = (event: PointerEvent) => {
       cancelAnimationFrame(pickFrame)
       if (picked >= 0) clearPick()
+      if (event.buttons !== 0) return
+      if (userPaused && idleTimer === 0) armResume()
     }
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('pointerleave', onPointerLeave)
+    canvas.addEventListener('wheel', onWheel, { passive: true })
 
     const lockSimTarget = (positions: Float32Array, index: number) => {
       const [x, y, z] = exaggeratePoint(
@@ -609,6 +716,8 @@ export default function App() {
       lockSimTarget(catalog.positions, index)
       const { eye } = simCameraRig(simTarget.x, simTarget.y, simTarget.z)
       globe.globeOffset([0, 0])
+      inSimView = true
+      controls.autoRotate = false
       controls.minDistance = 12
       controls.maxDistance = 80
       controls.rotateSpeed = 0.85
@@ -646,9 +755,14 @@ export default function App() {
       star.visible = pinOn
       syncShell(altitudeRef.current)
       fit()
+      inSimView = false
+      globe.pointOfView(HOME, 900)
+      holdSpin(900)
     }
 
     const worker = new Worker(new URL('./propagate.worker.ts', import.meta.url), { type: 'module' })
+    workerRef.current = worker
+    let clockLabel = ''
 
     worker.onerror = () => {
       setStatus({ state: 'error', message: 'Orbit worker failed' })
@@ -685,6 +799,18 @@ export default function App() {
         return
       }
       if (!cloud || !fleet || message.positions.length !== factsRef.current.length * 3) return
+      if (message.ring) {
+        const shown = Math.min(RING_DRAW_CAP, message.ring.length / 3)
+        const attr = ringCloud.geometry.getAttribute('position')
+        ;(attr.array as Float32Array).set(message.ring.subarray(0, shown * 3))
+        attr.needsUpdate = true
+        ringCloud.geometry.setDrawRange(0, shown)
+      }
+      const label = new Date(message.simMs).toISOString().slice(0, 16).replace('T', ' ')
+      if (label !== clockLabel) {
+        clockLabel = label
+        setSimLabel(`${label} UTC`)
+      }
       const positions = cloud.geometry.getAttribute('position')
       const array = positions.array as Float32Array
       array.set(message.positions)
@@ -708,10 +834,12 @@ export default function App() {
     const origin = new Vector3()
     const dir = new Vector3()
     const onDown = (event: PointerEvent) => {
+      if (pointerOverGlobe(event)) holdForPointer()
       downX = event.clientX
       downY = event.clientY
     }
     const onUp = (event: PointerEvent) => {
+      if (!pointerOverGlobe(event) && userPaused && idleTimer === 0) armResume()
       if (simLiveRef.current) return
       if (Math.hypot(event.clientX - downX, event.clientY - downY) > 5) return
       const catalog = catalogRef.current
@@ -736,8 +864,11 @@ export default function App() {
       clearPickRef.current = () => {}
       selectByNoradRef.current = () => false
       cancelAnimationFrame(pickFrame)
+      window.clearTimeout(idleTimer)
+      window.clearTimeout(releaseTimer)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerleave', onPointerLeave)
+      canvas.removeEventListener('wheel', onWheel)
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointerup', onUp)
       cancelAnimationFrame(refit)
@@ -750,7 +881,13 @@ export default function App() {
       catalogRef.current = null
       window.removeEventListener('resize', fit)
       window.visualViewport?.removeEventListener('resize', fit)
+      workerRef.current = null
+      controlsRef.current = null
+      releaseSpinRef.current = () => {}
       worker.terminate()
+      ringGeometry.dispose()
+      ringMaterial.dispose()
+      ringCloud.removeFromParent()
       dots.dispose()
       models.dispose()
       orbitMaterial.dispose()
@@ -764,6 +901,19 @@ export default function App() {
       globe._destructor()
     }
   }, [graphics])
+
+  useEffect(() => {
+    const worker = workerRef.current
+    if (!worker) return
+    worker.postMessage({ kind: 'rate', rate: clockRate })
+    worker.postMessage({ kind: 'ring', altKm: altitude, incDeg: inclination, count })
+    const controls = controlsRef.current
+    if (clockRate > 1) {
+      if (controls) controls.autoRotate = false
+    } else {
+      releaseSpinRef.current()
+    }
+  }, [clockRate, altitude, inclination, count])
 
   const applyUiEvent = (event: UiEvent) => {
     if (event.type === 'focusOrbit') {
@@ -917,14 +1067,47 @@ export default function App() {
             if (hood) startViz(hood)
           }}
         />
-        <ul className="legend">
-          {LEGEND.map((item) => (
-            <li key={item.key}>
-              <span className="swatch" style={{ background: item.color }} />
-              <span>{item.label}</span>
+        <div className="legend-block">
+          <ul className="legend">
+            {LEGEND.map((item) => (
+              <li key={item.key}>
+                <span className="swatch" style={{ background: item.color }} />
+                <span>{item.label}</span>
+              </li>
+            ))}
+            <li>
+              <span className="swatch swatch-constellation" />
+              <span>
+                your constellation
+                {count > RING_DRAW_CAP ? (
+                  <span className="legend-count num">
+                    {' '}
+                    showing {RING_DRAW_CAP.toLocaleString('en-US')} of {count.toLocaleString('en-US')}
+                  </span>
+                ) : null}
+              </span>
             </li>
-          ))}
-        </ul>
+          </ul>
+          <div className="clock" role="group" aria-label="Time lapse">
+            {(
+              [
+                [1, '1×'],
+                [60, '60×'],
+                [600, '600×'],
+              ] as const
+            ).map(([rate, label]) => (
+              <button
+                key={rate}
+                type="button"
+                aria-pressed={clockRate === rate}
+                onClick={() => setClockRate(rate)}
+              >
+                <span className="num">{label}</span>
+              </button>
+            ))}
+            {simLabel ? <p className="clock-time num">{simLabel}</p> : null}
+          </div>
+        </div>
         <p className="source">Tracked objects only, lower bound</p>
       </aside>
       {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
