@@ -190,6 +190,98 @@ h1 {
   color: #e7f27a;
 }
 
+.step {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(201, 214, 227, 0.12);
+}
+
+.step-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-family: 'Geist Variable', ui-sans-serif, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+  color: #c9d6e3;
+}
+
+.step-num {
+  color: #e7f27a;
+  font-size: 12px;
+}
+
+.step-number {
+  width: 5.5em;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 6px 8px;
+  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-size: 13px;
+  color: #c9d6e3;
+  background: rgba(5, 7, 11, 0.55);
+  border: 1px solid rgba(201, 214, 227, 0.28);
+}
+
+.suggest {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  color: #e7f27a;
+  background: transparent;
+  border: 1px solid rgba(231, 242, 122, 0.45);
+  cursor: pointer;
+}
+
+.suggest:disabled {
+  color: rgba(201, 214, 227, 0.4);
+  border-color: rgba(201, 214, 227, 0.18);
+  cursor: default;
+}
+
+.step .presets {
+  margin-bottom: 0;
+}
+
+.step .shell-count {
+  margin-top: 12px;
+}
+
+.saved-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.saved-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.7fr 1.3fr 0.9fr;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 0;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  color: #c9d6e3;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(201, 214, 227, 0.12);
+  cursor: pointer;
+}
+
+.saved-row:hover {
+  color: #e7f27a;
+}
+
 .field {
   display: grid;
   gap: 6px;

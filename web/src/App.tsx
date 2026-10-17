@@ -234,6 +234,7 @@ export default function App() {
     image: { src: string; label: string } | null
   } | null>(null)
   const [altitude, setAltitude] = useState(START_ALTITUDE)
+  const [altitudeChosen, setAltitudeChosen] = useState(false)
   const [inclination, setInclination] = useState(53)
   const [count, setCount] = useState(1000)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
@@ -766,6 +767,7 @@ export default function App() {
         </p>
         <PlacePanel
           altitude={altitude}
+          altitudeChosen={altitudeChosen}
           inclination={inclination}
           count={count}
           shells={shells}
@@ -773,6 +775,7 @@ export default function App() {
           debrisOnly={debrisOnly}
           onAltitude={(value) => {
             setAltitude(value)
+            setAltitudeChosen(true)
             flyRef.current({ altitude_km: value, inclination_deg: inclination })
           }}
           onInclination={(value) => {
@@ -783,9 +786,14 @@ export default function App() {
           onDebrisOnly={setDebrisOnly}
           onScene={(scene) => {
             setAltitude(scene.altitude)
+            setAltitudeChosen(true)
+            if (scene.inclination != null) setInclination(scene.inclination)
             if (scene.count != null) setCount(scene.count)
             if (scene.debrisOnly != null) setDebrisOnly(scene.debrisOnly)
-            flyRef.current({ altitude_km: scene.altitude, inclination_deg: inclination })
+            flyRef.current({
+              altitude_km: scene.altitude,
+              inclination_deg: scene.inclination ?? inclination,
+            })
           }}
           onVisualizeShell={() => {
             const catalog = catalogRef.current
@@ -817,6 +825,7 @@ export default function App() {
         onFocus={(focus) => {
           const next = Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10))
           setAltitude(next)
+          setAltitudeChosen(true)
           setInclination(focus.inclination_deg)
           flyRef.current({ ...focus, altitude_km: next })
         }}

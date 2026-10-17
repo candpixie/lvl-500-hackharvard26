@@ -107,11 +107,16 @@ export interface PlaceResult {
   note: string
 }
 
-export async function placeAt(altKm: number, incDeg = 53, count = 1000): Promise<PlaceResult> {
+export async function placeAt(
+  altKm: number,
+  incDeg = 53,
+  count = 1000,
+  dims: number[] = [4, 2, 1],
+): Promise<PlaceResult> {
   const response = await fetch('/place', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ alt_km: altKm, inc_deg: incDeg, dims_m: [4, 2, 1], count }),
+    body: JSON.stringify({ alt_km: altKm, inc_deg: incDeg, dims_m: dims, count }),
   })
   if (!response.ok) throw new Error(`Place failed (${response.status})`)
   return response.json() as Promise<PlaceResult>
@@ -127,8 +132,8 @@ export interface RankRow {
   reason: string
 }
 
-export async function rankShells(count: number, top = 5): Promise<RankRow[]> {
-  const response = await fetch(`/rank?dims=4,2,1&count=${count}&top=${top}`)
+export async function rankShells(count: number, top = 5, dims: number[] = [4, 2, 1]): Promise<RankRow[]> {
+  const response = await fetch(`/rank?dims=${dims.join(',')}&count=${count}&top=${top}`)
   if (!response.ok) throw new Error(`Rank failed (${response.status})`)
   const payload = (await response.json()) as { rows?: RankRow[] }
   return payload.rows ?? []
