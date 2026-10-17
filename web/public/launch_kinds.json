@@ -1,0 +1,287 @@
+{
+ "snapshot_id": "d29cf5404f55",
+ "source": "CelesTrak SATCAT + SOCRATES, one week",
+ "kinds": [
+  {
+   "kind": "station",
+   "label": "space station",
+   "objects": 1,
+   "altitude_km": {
+    "p10": 420,
+    "median": 420,
+    "p90": 420
+   },
+   "inclination_deg_median": 51.6,
+   "close_approaches_per_object": 3.0,
+   "share_with_at_least_one": 1.0,
+   "shell_at_median_altitude": {
+    "shell_km": [
+     400,
+     450
+    ],
+    "objects_in_shell": 445,
+    "debris_share": 0.07
+   },
+   "all_leo_close_approaches_per_object": 9.2,
+   "map_groups": [
+    "stations"
+   ],
+   "caveats": [
+    "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
+    "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
+    "Near-polar orbits (about 97 degrees) cross many inclined constellations; that may explain high counts for imaging, weather, cubesat and science kinds, but it was not tested.",
+    "Kind labels are CelesTrak's group files; tracked objects only.",
+    "Space station means the ISS alone (one object), so its numbers are an example, not a statistic.",
+    "Only 1 objects of this kind; treat the averages loosely."
+   ]
+  },
+  {
+   "kind": "starlink",
+   "label": "Starlink-style communications constellation",
+   "objects": 11124,
+   "altitude_km": {
+    "p10": 455,
+    "median": 466,
+    "p90": 483
+   },
+   "inclination_deg_median": 53.2,
+   "close_approaches_per_object": 8.4,
+   "share_with_at_least_one": 0.97,
+   "shell_at_median_altitude": {
+    "shell_km": [
+     450,
+     500
+    ],
+    "objects_in_shell": 10371,
+    "debris_share": 0.01
+   },
+   "all_leo_close_approaches_per_object": 9.2,
+   "map_groups": [
+    "starlink"
+   ],
+   "caveats": [
+    "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
+    "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
+    "Near-polar orbits (about 97 degrees) cross many inclined constellations; that may explain high counts for imaging, weather, cubesat and science kinds, but it was not tested.",
+    "Kind labels are CelesTrak's group files; tracked objects only."
+   ]
+  },
+  {
+   "kind": "oneweb",
+   "label": "OneWeb-style communications constellation",
+   "objects": 651,
+   "altitude_km": {
+    "p10": 1182,
+    "median": 1202,
+    "p90": 1218
+   },
+   "inclination_deg_median": 87.9,
+   "close_approaches_per_object": 3.6,
+   "share_with_at_least_one": 0.96,
+   "shell_at_median_altitude": {
+    "shell_km": [
+     1200,
+     1250
+    ],
+    "objects_in_shell": 478,
+    "debris_share": 0.26
+   },
+   "all_leo_close_approaches_per_object": 9.2,
+   "map_groups": [
+    "oneweb"
+   ],
+   "caveats": [
+    "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
+    "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
+    "Near-polar orbits (about 97 degrees) cross many inclined constellations; that may explain high counts for imaging, weather, cubesat and science kinds, but it was not tested.",
+    "Kind labels are CelesTrak's group files; tracked objects only."
+   ]
+  },
+  {
+   "kind": "kuiper",
+   "label": "Kuiper-style communications constellation",
+   "objects": 391,
+   "altitude_km": {
+    "p10": 630,
+    "median": 630,
+    "p90": 630
+   },
+   "inclination_deg_median": 51.9,
+   "close_approaches_per_object": 10.7,
+   "share_with_at_least_one": 1.0,
+   "shell_at_median_altitude": {
+    "shell_km": [
+     600,
+     650
+    ],
+    "objects_in_shell": 1168,
+    "debris_share": 0.33
+   },
+   "all_leo_close_approaches_per_object": 9.2,
+   "map_groups": [
+    "kuiper"
+   ],
+   "caveats": [
+    "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
+    "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
+    "Near-polar orbits (about 97 degrees) cross many inclined constellations; that may explain high counts for imaging, weather, cubesat and science kinds, but it was not tested.",
+    "Kind labels are CelesTrak's group files; tracked objects only."
+   ]
+  },
+  {
+   "kind": "earth_imaging",
+   "label": "Earth imaging (Planet)",
+   "objects": 123,
+   "altitude_km": {
+    "p10": 414,
+    "median": 470,
+    "p90": 503
+   },
+   "inclination_deg_median": 97.4,
+   "close_approaches_per_object": 53.8,
+   "share_with_at_least_one": 0.98,
+   "shell_at_median_altitude": {
+    "shell_km": [
+     450,
+     500
+    ],
+    "objects_in_shell": 10371,
+    "debris_share": 0.01
+   },
+   "all_leo_close_approaches_per_object": 9.2,
+   "map_groups": [
+    "planet"
+   ],
+   "caveats": [
+    "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
+    "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
+    "Near-polar orbits (about 97 degrees) cross many inclined constellations; that may explain high counts for imaging, weather, cubesat and science kinds, but it was not tested.",
+    "Kind labels are CelesTrak's group files; tracked objects only."
+   ]
+  },
+  {
+   "kind": "weather",
+   "label": "weather satellite",
+   "objects": 50,
+   "altitude_km": {
+    "p10": 378,
+    "median": 483,
+    "p90": 828
+   },
+   "inclination_deg_median": 97.5,
+   "close_approaches_per_object": 69.8,
+   "share_with_at_least_one": 0.98,
+   "shell_at_median_altitude": {
+    "shell_km": [
+     450,
+     500
+    ],
+    "objects_in_shell": 10371,
+    "debris_share": 0.01
+   },
+   "all_leo_close_approaches_per_object": 9.2,
+   "map_groups": [
+    "weather"
+   ],
+   "caveats": [
+    "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
+    "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
+    "Near-polar orbits (about 97 degrees) cross many inclined constellations; that may explain high counts for imaging, weather, cubesat and science kinds, but it was not tested.",
+    "Kind labels are CelesTrak's group files; tracked objects only."
+   ]
+  },
+  {
+   "kind": "cubesat",
+   "label": "cubesat",
+   "objects": 83,
+   "altitude_km": {
+    "p10": 438,
+    "median": 556,
+    "p90": 680
+   },
+   "inclination_deg_median": 97.7,
+   "close_approaches_per_object": 42.4,
+   "share_with_at_least_one": 1.0,
+   "shell_at_median_altitude": {
+    "shell_km": [
+     550,
+     600
+    ],
+    "objects_in_shell": 1309,
+    "debris_share": 0.17
+   },
+   "all_leo_close_approaches_per_object": 9.2,
+   "map_groups": [
+    "cubesat"
+   ],
+   "caveats": [
+    "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
+    "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
+    "Near-polar orbits (about 97 degrees) cross many inclined constellations; that may explain high counts for imaging, weather, cubesat and science kinds, but it was not tested.",
+    "Kind labels are CelesTrak's group files; tracked objects only."
+   ]
+  },
+  {
+   "kind": "science",
+   "label": "science satellite",
+   "objects": 37,
+   "altitude_km": {
+    "p10": 468,
+    "median": 562,
+    "p90": 786
+   },
+   "inclination_deg_median": 97.5,
+   "close_approaches_per_object": 40.4,
+   "share_with_at_least_one": 1.0,
+   "shell_at_median_altitude": {
+    "shell_km": [
+     550,
+     600
+    ],
+    "objects_in_shell": 1309,
+    "debris_share": 0.17
+   },
+   "all_leo_close_approaches_per_object": 9.2,
+   "map_groups": [
+    "science"
+   ],
+   "caveats": [
+    "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
+    "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
+    "Near-polar orbits (about 97 degrees) cross many inclined constellations; that may explain high counts for imaging, weather, cubesat and science kinds, but it was not tested.",
+    "Kind labels are CelesTrak's group files; tracked objects only."
+   ]
+  },
+  {
+   "kind": "military",
+   "label": "military satellite",
+   "objects": 45,
+   "altitude_km": {
+    "p10": 942,
+    "median": 945,
+    "p90": 952
+   },
+   "inclination_deg_median": 81.5,
+   "close_approaches_per_object": 15.4,
+   "share_with_at_least_one": 1.0,
+   "shell_at_median_altitude": {
+    "shell_km": [
+     900,
+     950
+    ],
+    "objects_in_shell": 936,
+    "debris_share": 0.74
+   },
+   "all_leo_close_approaches_per_object": 9.2,
+   "map_groups": [
+    "military"
+   ],
+   "caveats": [
+    "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not collision probabilities and not a forecast for a new satellite.",
+    "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, so constellations look quieter than other kinds partly by construction.",
+    "Near-polar orbits (about 97 degrees) cross many inclined constellations; that may explain high counts for imaging, weather, cubesat and science kinds, but it was not tested.",
+    "Kind labels are CelesTrak's group files; tracked objects only."
+   ]
+  }
+ ]
+}

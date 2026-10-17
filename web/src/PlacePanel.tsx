@@ -64,6 +64,18 @@ function formatScore(score: number) {
   return Number.isInteger(score) ? String(Math.round(score)) : score.toFixed(1)
 }
 
+interface LaunchKind {
+  kind: string
+  label: string
+  map_groups: string[]
+  objects: number
+  altitude_km: { p10: number; median: number; p90: number }
+  inclination_deg_median: number
+  close_approaches_per_object: number
+  all_leo_close_approaches_per_object: number
+  caveats: string[]
+}
+
 interface SavedPlacement {
   id: number
   name: string
@@ -82,6 +94,7 @@ interface PlacePanelProps {
   shells: ShellRow[] | null
   shellError: string | null
   debrisOnly: boolean
+  onSeeGroups: (groups: string[] | null) => void
   onAltitude: (value: number) => void
   onInclination: (value: number) => void
   onCount: (value: number) => void
@@ -115,6 +128,7 @@ export default function PlacePanel({
   shells,
   shellError,
   debrisOnly,
+  onSeeGroups,
   onAltitude,
   onInclination,
   onCount,
@@ -148,6 +162,10 @@ export default function PlacePanel({
   const [saveName, setSaveName] = useState('')
   const [openSaveId, setOpenSaveId] = useState<number | null>(null)
   const [touched, setTouched] = useState(false)
+  const [kinds, setKinds] = useState<LaunchKind[]>([])
+  const [kindKey, setKindKey] = useState('')
+  const [seeKey, setSeeKey] = useState('')
+  const kind = kinds.find((row) => row.kind === kindKey) ?? null
   const dims = dimsFor(size)
   const ready = altitudeChosen || touched
   const tone = ready && place ? scoreTone(place.score) : null
@@ -194,6 +212,23 @@ export default function PlacePanel({
       .then(setMiss)
       .catch(() => setMiss(null))
   }, [])
+
+  useEffect(() => {
+    fetch('/launch_kinds.json')
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
+      .then((payload: { kinds?: LaunchKind[] }) => setKinds(payload.kinds ?? []))
+      .catch(() => setKinds([]))
+  }, [])
+
+  function chooseKind(key: string) {
+    setKindKey(key)
+  }
+
+  function chooseSee(key: string) {
+    setSeeKey(key)
+    const row = kinds.find((item) => item.kind === key)
+    onSeeGroups(row ? row.map_groups : null)
+  }
 
   useEffect(() => {
     const name = placeName?.trim()
@@ -300,6 +335,36 @@ export default function PlacePanel({
           <span className="step-num num">1</span>
           Your mission
         </h2>
+        {kinds.length > 0 && (
+          <label className="field">
+            <span className="field-label">What are you launching?</span>
+            <select
+              className="step-number kind-select"
+              value={kindKey}
+              aria-label="Type of object"
+              onChange={(event) => chooseKind(event.target.value)}
+            >
+              <option value="">Custom</option>
+              {kinds.map((row) => (
+                <option key={row.kind} value={row.kind}>
+                  {row.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {kind && (
+          <p className="shell-line kind-line" title={kind.caveats.join(' ')}>
+            Existing {kind.label}s ({kind.objects.toLocaleString('en-US')}): typically{' '}
+            <span className="num">
+              {kind.altitude_km.p10}–{kind.altitude_km.p90} km
+            </span>{' '}
+            at <span className="num">{Math.round(kind.inclination_deg_median)}°</span>. About{' '}
+            <span className="num">{kind.close_approaches_per_object}</span> predicted close approaches each this
+            week, against <span className="num">{kind.all_leo_close_approaches_per_object}</span> for the average
+            object in low orbit. Observed for existing objects, not a forecast for yours. SOCRATES, one week.
+          </p>
+        )}
         <label className="field">
           <span className="field-label">
             Size
@@ -558,6 +623,24 @@ export default function PlacePanel({
         >
           {debrisOnly ? 'Debris only' : 'Show debris only'}
         </button>
+        {kinds.length > 0 && (
+          <label className="field">
+            <span className="field-label">Highlight on the globe</span>
+            <select
+              className="step-number kind-select"
+              value={seeKey}
+              aria-label="Highlight existing objects of a kind"
+              onChange={(event) => chooseSee(event.target.value)}
+            >
+              <option value="">Show all</option>
+              {kinds.map((row) => (
+                <option key={row.kind} value={row.kind}>
+                  {row.label}s
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </section>
 
       <section className="step step-impact">

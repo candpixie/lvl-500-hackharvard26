@@ -7,6 +7,8 @@ Run after fetch_orbits.py:  uv run python pipeline/build_tools_data.py
 import pathlib
 import sys
 
+import pandas as pd
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from chalk_tools import core  # noqa: E402
@@ -23,6 +25,8 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     snap.catalog[CATALOG_COLS].to_csv(OUT / "catalog.csv.gz", index=False)
     snap.socrates[SOCRATES_COLS].to_csv(OUT / "socrates.csv.gz", index=False)
+    pd.DataFrame([(k, n) for k, ids in snap.kind_members.items() for n in ids],
+                 columns=["kind", "NORAD_CAT_ID"]).to_csv(OUT / "kinds.csv.gz", index=False)
     (OUT / "snapshot_id.txt").write_text(snap.snapshot_id)
     sizes = {p.name: f"{p.stat().st_size / 1e6:.1f} MB" for p in OUT.iterdir()}
     print(f"snapshot {snap.snapshot_id}: {sizes}")

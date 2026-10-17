@@ -66,6 +66,12 @@ def recommend_orbit(inclination_deg: float, min_altitude_km: float = 400.0, max_
                 inclination_band_deg=inclination_band_deg)
 
 
+@chalkcompute.function(image=IMAGE, tracing=True, cpu="1", memory="2Gi")
+def launch_kind_profile(kind: str) -> str:
+    _ = REV
+    return _run("launch_kind_profile", core.launch_kind_profile, kind=kind)
+
+
 if __name__ == "__main__":
     # Smoke test of the deployed functions; one cheap call each.
     print(json.loads(shell_crowding.remote(550.0))["data"]["counts"])

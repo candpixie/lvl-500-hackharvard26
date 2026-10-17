@@ -112,11 +112,13 @@ const craftVertex = `
 const pointVertex = `
   attribute float aAlt;
   attribute float aKind;
+  attribute float aMatch;
   uniform float uShellMin;
   uniform float uShellMax;
   uniform float uDim;
   uniform float uHideOutside;
   uniform float uDebrisOnly;
+  uniform float uMatchOn;
   uniform float uExaggerate;
   uniform float uPixelRatio;
   uniform float uSize;
@@ -134,9 +136,15 @@ const pointVertex = `
     else vAlpha = mix(uDim, 1.0, inside);
     if (uHideOutside > 0.5) vAlpha *= inside;
     if (uDebrisOnly > 0.5) vAlpha *= debris;
+    float match = uMatchOn * aMatch;
+    if (uMatchOn > 0.5) {
+      vAlpha = mix(0.06, 1.0, aMatch);
+      if (aMatch > 0.5) vColor = vec3(0.2, 0.9, 1.0);
+    }
     vec4 mv = modelViewMatrix * vec4(placed, 1.0);
     float base = mix(1.5, 2.5, debris);
-    gl_PointSize = base * mix(1.0, 2.1, inside) * uPixelRatio * uSize;
+    float depthScale = clamp(265.0 / max(-mv.z, 1.0), 0.6, 1.8);
+    gl_PointSize = base * depthScale * mix(1.0, 2.1, max(inside * (1.0 - uMatchOn), match)) * uPixelRatio * uSize;
     gl_Position = projectionMatrix * mv;
   }
 `
@@ -195,6 +203,7 @@ function shellUniforms(altitudeKm: number) {
     uDim: { value: 0.07 },
     uHideOutside: { value: 0 },
     uDebrisOnly: { value: 0 },
+    uMatchOn: { value: 0 },
   }
 }
 
@@ -233,6 +242,7 @@ export default function App() {
   const hostRef = useRef<HTMLDivElement>(null)
   const applyShellRef = useRef<(altitudeKm: number) => void>(() => {})
   const debrisRef = useRef<(on: boolean) => void>(() => {})
+  const matchRef = useRef<(groups: string[] | null) => void>(() => {})
   const flyRef = useRef<(focus: FocusOrbit, opts?: { pin?: boolean; look?: boolean }) => void>(() => {})
   const selectByNoradRef = useRef<(norad: number) => boolean>(() => false)
   const catalogRef = useRef<CatalogPick | null>(null)
@@ -271,6 +281,7 @@ export default function App() {
   const controlsRef = useRef<{ autoRotate: boolean } | null>(null)
   const releaseSpinRef = useRef<() => void>(() => {})
   fastRef.current = clockRate > 1
+  const [seeGroups, setSeeGroups] = useState<string[] | null>(null)
   const [epoch, setEpoch] = useState('')
   const [close, setClose] = useState(false)
   const [fact, setFact] = useState<ObjectFact | null>(null)
@@ -475,6 +486,15 @@ export default function App() {
       }
     }
     applyShellRef.current = syncShell
+    matchRef.current = (groups) => {
+      if (!cloud) return
+      const attr = cloud.geometry.getAttribute('aMatch')
+      const flags = attr.array as Float32Array
+      const facts = factsRef.current
+      for (let i = 0; i < flags.length; i++) flags[i] = groups && facts[i]?.groups.some((g) => groups.includes(g)) ? 1 : 0
+      attr.needsUpdate = true
+      for (const material of materials) material.uniforms.uMatchOn.value = groups ? 1 : 0
+    }
     debrisRef.current = (on) => {
       const value = on ? 1 : 0
       for (const material of materials) material.uniforms.uDebrisOnly.value = value
@@ -863,6 +883,7 @@ export default function App() {
         geometry.setAttribute('color', new Float32BufferAttribute(message.colors, 3))
         geometry.setAttribute('aAlt', new Float32BufferAttribute(message.altitudes, 1))
         geometry.setAttribute('aKind', new Float32BufferAttribute(message.kinds, 1))
+        geometry.setAttribute('aMatch', new Float32BufferAttribute(new Float32Array(message.kinds.length), 1))
         const points = new Points(geometry, dots)
         points.frustumCulled = false
         globe.scene().add(points)
@@ -962,6 +983,7 @@ export default function App() {
     return () => {
       applyShellRef.current = () => {}
       debrisRef.current = () => {}
+      matchRef.current = () => {}
       clearPickRef.current = () => {}
       selectByNoradRef.current = () => false
       cancelAnimationFrame(pickFrame)
@@ -1083,6 +1105,10 @@ export default function App() {
   }, [debrisOnly])
 
   useEffect(() => {
+    matchRef.current(seeGroups)
+  }, [seeGroups])
+
+  useEffect(() => {
     if (!fact || !close) return
     const bounds = shellBounds(altitude)
     const hiddenByShell = fact.meanKm < bounds.min || fact.meanKm > bounds.max
@@ -1167,6 +1193,7 @@ export default function App() {
           shells={shells}
           shellError={shellError}
           debrisOnly={debrisOnly}
+          onSeeGroups={setSeeGroups}
           onAltitude={(value) => {
             if (Date.now() < ignoreSliderUntil.current) return
             setAltitude(value)
