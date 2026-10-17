@@ -6,6 +6,11 @@ function formatCount(value: number) {
   return value.toLocaleString('en-US')
 }
 
+function formatCollisions(value: number) {
+  const shown = value < 1 ? value.toFixed(2) : Math.round(value).toLocaleString('en-US')
+  return `${shown} expected collisions per year (first-order model)`
+}
+
 interface PlacePanelProps {
   altitude: number
   shells: ShellRow[] | null
@@ -49,12 +54,12 @@ export default function PlacePanel({
               className="shell-note"
               title={`${place.note}. Expected collisions per year is a first-order model. Lifetime is approximate.`}
             >
-              Score {place.score}/100 · wreckage stays ~{Math.round(place.dead_sat_lifetime_years)} yr
+              {Math.round(place.score)}/100, higher is safer · wreckage stays ~
+              {Math.round(place.dead_sat_lifetime_years)} yr
               <br />
-              {place.collisions_per_year < 1
-                ? `${place.collisions_per_year.toFixed(2)} collisions/yr`
-                : `${Math.round(place.collisions_per_year).toLocaleString('en-US')} collisions/yr`}
-              {' · 1,000 × 4 m sats · tracked objects only, lower bound'}
+              {formatCollisions(place.collisions_per_year)}
+              <br />
+              1,000 × 4 m sats · tracked objects only, lower bound
             </p>
           )}
           <p
@@ -79,7 +84,11 @@ export default function PlacePanel({
           onChange={(event) => onAltitude(Number(event.target.value))}
         />
       </label>
-      <p className="shell-note">Altitude exaggerated 5.5×</p>
+      <p className="shell-note">
+        Altitude exaggerated 5.5×
+        <br />
+        Enlarged, not to scale
+      </p>
       <button
         className="debris-toggle"
         type="button"

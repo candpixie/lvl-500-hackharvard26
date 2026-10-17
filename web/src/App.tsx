@@ -512,7 +512,6 @@ export default function App() {
         <p className="kicker">Orbit Payback</p>
         <h1>How crowded is this altitude?</h1>
         <p className="dek">{close ? 'Point at a satellite.' : 'That shell stays bright.'}</p>
-        {close && <p className="scale-note">Enlarged, not to scale</p>}
         <p className="asof">{epoch ? `Data as of ${formatEpoch(epoch)}` : 'CelesTrak GP'}</p>
         <PlacePanel
           altitude={altitude}
