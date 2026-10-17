@@ -22,6 +22,10 @@ from functools import lru_cache
 from pathlib import Path
 
 LOCAL_ROOT = Path(__file__).resolve().parent.parent
+if str(LOCAL_ROOT / "pipeline") not in sys.path:
+    sys.path.insert(0, str(LOCAL_ROOT / "pipeline"))
+import locations as locations_mod  # noqa: E402
+
 DEFAULT_DIMS_M = [4.0, 2.0, 1.0]
 DEFAULT_INC_DEG = 53.0
 NOTE = "tracked objects only, lower bound"
@@ -92,7 +96,10 @@ def _number(text: str) -> float:
 
 def parse_question(q: str) -> dict:
     t = q.lower().replace("’", "'")
-    out = {"intent": None, "alt_km": None, "count": None, "dims_m": None, "inc_deg": None}
+    out = {"intent": None, "alt_km": None, "count": None, "dims_m": None, "inc_deg": None, "region": None}
+    found = locations_mod.find_region(t)
+    if found is not None:
+        out["region"] = found.id
     m = re.search(r"(\d[\d,]*\.?\d*)\s*(?:km|kilometers?|kilometres?)\b", t)
     if m:
         out["alt_km"] = _number(m.group(1))
@@ -119,6 +126,8 @@ def parse_question(q: str) -> dict:
         out["inc_deg"] = float(m.group(1))
     if re.search(r"near[- ]?miss|close approach|closest|close call", t):
         out["intent"] = "near_miss"
+    elif out["region"] is not None:
+        out["intent"] = "locate"
     elif re.search(r"\bwhy\b", t) and out["alt_km"] is not None:
         out["intent"] = "why"
     elif re.search(r"what (?:happens )?if|what would happen|suppose", t) and out["alt_km"] is not None:
@@ -187,10 +196,28 @@ def _near_miss_sentence(r: dict) -> str:
             f"not a probability we computed.")
 
 
+def _locate(p: dict) -> dict:
+    result = locations_mod.rank_over(p["region"], p["alt_km"], top=5)
+    text = locations_mod.explain(result)
+    focus = dict(result["focus"])
+    if p["count"] is not None:
+        focus["count"] = int(p["count"])
+    if p["dims_m"] is not None:
+        focus["dims_m"] = [float(x) for x in p["dims_m"]]
+    arguments = {"region": p["region"], "altitude_km": p["alt_km"], "top": 5}
+    return {"answer": text, "focus": focus,
+            "tool_calls": [_call("rank_locations", arguments, result)], "note": NOTE}
+
+
 def answer(question: str) -> dict:
     """Returns the /ask body, or {"error": reason} when the question is outside what these resolvers answer."""
-    R = resolvers()
     p = parse_question(question or "")
+    if p["intent"] == "locate":
+        try:
+            return _locate(p)
+        except ValueError as exc:
+            return {"error": str(exc)}
+    R = resolvers()
     dims = p["dims_m"] or DEFAULT_DIMS_M
     inc = p["inc_deg"] if p["inc_deg"] is not None else DEFAULT_INC_DEG
     count = p["count"] or 1
@@ -258,5 +285,5 @@ def answer(question: str) -> dict:
                 f"{_years(top['dead_sat_lifetime_years'])}. {NOTE_SENTENCE}")
         return {"answer": text, "focus": _focus(top["alt_lo"] + 25, inc, count, dims),
                 "tool_calls": [_call("rank_shells", {"count": count, "dims_m": dims, "top": 3}, rows)], "note": NOTE}
-    return {"error": "I can answer where to place satellites, what happens at an altitude, why an altitude is crowded, "
-                     "and the closest near miss this week."}
+    return {"error": "I can answer where to place satellites, including over Africa or China, what happens at an altitude, "
+                     "why an altitude is crowded, and the closest near miss this week."}

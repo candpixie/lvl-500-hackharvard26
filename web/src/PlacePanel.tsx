@@ -1,6 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
-import { closestMiss, placeAt, rankShells, type NearMiss, type PlaceResult, type RankRow } from './events.ts'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  closestMiss,
+  placeAt,
+  rankLocations,
+  rankShells,
+  type LocationRank,
+  type LocationSlot,
+  type NearMiss,
+  type PlaceResult,
+  type RankRow,
+} from './events.ts'
 import { majorityLabel, shellForAltitude, shellRange, shellTotal, type ShellRow } from './shells.ts'
+
+const PLACE_CHIPS = ['Africa', 'China', 'Europe']
 
 const COUNTS = [
   { label: '1', value: 1 },
@@ -35,6 +47,19 @@ function scoreTone(score: number) {
   return 'crowded'
 }
 
+function formatBand(value: number) {
+  if (Math.abs(value - Math.round(value)) < 0.05) return Math.round(value).toLocaleString('en-US')
+  return value.toFixed(1)
+}
+
+function bandReason(row: LocationSlot, place: string) {
+  const band = `${formatBand(row.inc_lo)}–${formatBand(row.inc_hi)}° band`
+  const slice = row.band_covers
+    ? band
+    : `${band} · reaches ${place} from ${formatBand(row.covering_lo)}–${formatBand(row.covering_hi)}°`
+  return `${slice} · ${formatBand(row.debris)} debris · ${formatBand(row.total)} tracked · reaches ${formatBand(row.reaches_deg)}°`
+}
+
 function formatScore(score: number) {
   return Number.isInteger(score) ? String(Math.round(score)) : score.toFixed(1)
 }
@@ -67,9 +92,18 @@ interface PlacePanelProps {
     inclination?: number
     count?: number
     debrisOnly?: boolean
+    latitude?: number
+    longitude?: number
+    raan?: number
+    place?: string
+    look?: boolean
     focus?: boolean
   }) => void
   onVisualizeShell: () => void
+  askedPlace?: string | null
+  pickRegion: boolean
+  pickedLat: number | null
+  onPickRegion: (on: boolean) => void
 }
 
 export default function PlacePanel({
@@ -88,13 +122,28 @@ export default function PlacePanel({
   onDebrisOnly,
   onScene,
   onVisualizeShell,
+  askedPlace,
+  pickRegion,
+  pickedLat,
+  onPickRegion,
 }: PlacePanelProps) {
   const current = shells ? shellForAltitude(shells, altitude) : null
   const [place, setPlace] = useState<PlaceResult | null>(null)
+  const [scoredAltitude, setScoredAltitude] = useState<number | null>(null)
   const [ranks, setRanks] = useState<RankRow[]>([])
   const [showRanks, setShowRanks] = useState(false)
   const [miss, setMiss] = useState<NearMiss | null>(null)
   const [saved, setSaved] = useState<SavedPlacement[]>([])
+  const [placeName, setPlaceName] = useState<string | null>(null)
+  const [placeNonce, setPlaceNonce] = useState(0)
+  const [placeText, setPlaceText] = useState('')
+  const [slots, setSlots] = useState<LocationSlot[]>([])
+  const [busiest, setBusiest] = useState<LocationSlot | null>(null)
+  const [placeMeta, setPlaceMeta] = useState<LocationRank['region'] | null>(null)
+  const [placeError, setPlaceError] = useState<string | null>(null)
+  const appliedPlace = useRef<string | null>(null)
+  const onSceneRef = useRef(onScene)
+  onSceneRef.current = onScene
   const nextSaveId = useRef(1)
   const [saveName, setSaveName] = useState('')
   const [openSaveId, setOpenSaveId] = useState<number | null>(null)
@@ -102,6 +151,13 @@ export default function PlacePanel({
   const dims = dimsFor(size)
   const ready = altitudeChosen || touched
   const tone = ready && place ? scoreTone(place.score) : null
+  const shellLabel = current
+    ? `${current.shell_km.toLocaleString('en-US')}–${(current.shell_km + 50).toLocaleString('en-US')} km`
+    : null
+  const scoredShell = scoredAltitude == null ? null : Math.floor(scoredAltitude / 50) * 50
+  const scoreForShell = Boolean(placeMeta && shellLabel && current && scoredShell === current.shell_km)
+  const rankAltitude = Math.min(2000, Math.max(300, altitude))
+  const listedLo = Math.floor(rankAltitude / 50) * 50
 
   function commit() {
     setTouched(true)
@@ -111,8 +167,14 @@ export default function PlacePanel({
     const nextDims = dimsFor(size)
     const timer = window.setTimeout(() => {
       void placeAt(altitude, inclination, count, nextDims)
-        .then(setPlace)
-        .catch(() => setPlace(null))
+        .then((result) => {
+          setPlace(result)
+          setScoredAltitude(altitude)
+        })
+        .catch(() => {
+          setPlace(null)
+          setScoredAltitude(null)
+        })
     }, 220)
     return () => window.clearTimeout(timer)
   }, [altitude, inclination, count, size])
@@ -132,6 +194,79 @@ export default function PlacePanel({
       .then(setMiss)
       .catch(() => setMiss(null))
   }, [])
+
+  useEffect(() => {
+    const name = placeName?.trim()
+    if (!name) return
+    let cancel = false
+    const timer = window.setTimeout(() => {
+      void rankLocations(name, rankAltitude, 5)
+        .then((result) => {
+          if (cancel) return
+          setSlots(result.rows)
+          setBusiest(result.busiest ?? null)
+          setPlaceMeta(result.region)
+          setPlaceError(null)
+          const top = result.rows[0]
+          if (top && appliedPlace.current !== result.region.id) {
+            appliedPlace.current = result.region.id
+            onSceneRef.current({
+              altitude,
+              inclination: top.inclination_deg,
+              latitude: top.latitude_deg,
+              longitude: top.longitude_deg,
+              raan: top.raan_deg,
+              place: result.region.label,
+            })
+          }
+        })
+        .catch((err: unknown) => {
+          if (cancel) return
+          setSlots([])
+          setBusiest(null)
+          setPlaceMeta(null)
+          setPlaceError(err instanceof Error ? err.message : 'Could not rank that place')
+        })
+    }, 220)
+    return () => {
+      cancel = true
+      window.clearTimeout(timer)
+    }
+  }, [placeName, placeNonce, altitude])
+
+  useEffect(() => {
+    if (!askedPlace || askedPlace === placeName) return
+    askPlace(askedPlace)
+    // askPlace is stable enough for a place name arriving from Ask.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedPlace])
+
+  function askPlace(name: string) {
+    const next = name.trim()
+    if (!next) return
+    appliedPlace.current = null
+    setPlaceText(next)
+    setPlaceName(next)
+    setPlaceNonce((value) => value + 1)
+    commit()
+  }
+
+  function submitPlace(event: FormEvent) {
+    event.preventDefault()
+    askPlace(placeText)
+  }
+
+  function applySlot(row: LocationSlot) {
+    commit()
+    onScene({
+      altitude,
+      inclination: row.inclination_deg,
+      latitude: row.latitude_deg,
+      longitude: row.longitude_deg,
+      raan: row.raan_deg,
+      place: placeMeta?.label,
+    })
+  }
 
   function chooseSize(value: string) {
     const next = Number(value)
@@ -267,6 +402,109 @@ export default function PlacePanel({
           />
         </label>
 
+        <form className="place-query" onSubmit={submitPlace}>
+          <span className="field-label">
+            Over a place
+            <span>at this altitude</span>
+          </span>
+          <div className="presets place-presets" role="group" aria-label="Place over">
+            {PLACE_CHIPS.map((name) => (
+              <button
+                key={name}
+                type="button"
+                aria-pressed={placeMeta?.label === name}
+                onClick={() => askPlace(name)}
+              >
+                <span>{name}</span>
+                <span>ground track</span>
+              </button>
+            ))}
+          </div>
+          <label className="field">
+            <span className="field-label">Or another place</span>
+            <input
+              className="step-number place-input"
+              type="text"
+              value={placeText}
+              placeholder="India, Japan, Brazil…"
+              aria-label="Place to fly over"
+              onChange={(event) => setPlaceText(event.target.value)}
+            />
+          </label>
+          <button type="submit" className="suggest">
+            Rank orbits that cross it
+          </button>
+        </form>
+        {placeError && <p className="shell-note">{placeError}</p>}
+        {placeMeta && (
+          <p className="shell-line">
+            Needs <span className="num">{formatBand(placeMeta.min_reach_deg)}°</span> of latitude to cross{' '}
+            {placeMeta.name}. Quietest debris first.
+          </p>
+        )}
+        {slots.length > 0 && (
+          <ol className="rank-list">
+            {slots.map((row) => {
+              const active = Math.abs(inclination - row.inclination_deg) < 0.6
+              return (
+                <li key={`${row.alt_lo}-${row.inc_lo}`}>
+                  <button
+                    type="button"
+                    className="rank-row"
+                    aria-pressed={active}
+                    onClick={() => applySlot(row)}
+                  >
+                    <span className="rank-score num">{formatBand(row.debris)}</span>
+                    <span>
+                      <strong>{formatBand(row.inclination_deg)}°</strong>
+                      <span className="rank-reason">{bandReason(row, placeMeta?.name ?? 'this place')}</span>
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ol>
+        )}
+        {slots.length > 0 && busiest && slots[0] && busiest.inc_lo !== slots[0].inc_lo && (
+          <p className="shell-line">
+            Busiest covering band in this shell:{' '}
+            <span className="num">
+              {formatBand(busiest.inc_lo)}–{formatBand(busiest.inc_hi)}°
+            </span>
+            , {formatBand(busiest.debris)} tracked debris.
+          </p>
+        )}
+        {slots.length > 0 && (
+          <p className="shell-note">Counts are the whole 10° band. Tracked objects only, a lower bound.</p>
+        )}
+        {altitude < 300 && slots.length > 0 && (
+          <p className="shell-note">
+            The catalog grid starts at 300 km, so this list is the {listedLo.toLocaleString('en-US')}–
+            {(listedLo + 50).toLocaleString('en-US')} km shell. The globe is at{' '}
+            {Math.round(altitude).toLocaleString('en-US')} km.
+          </p>
+        )}
+
+        <button
+          className="debris-toggle"
+          type="button"
+          aria-pressed={pickRegion}
+          onClick={() => onPickRegion(!pickRegion)}
+        >
+          {pickRegion ? 'Picking a region' : 'Pick a region'}
+        </button>
+        {pickRegion && pickedLat == null && <p className="shell-note">Click a point on the globe.</p>}
+        {pickedLat != null && (
+          <p className="shell-line">
+            To pass over this latitude you need an inclination of at least{' '}
+            <span className="num">{formatBand(Math.abs(pickedLat))}°</span>.
+          </p>
+        )}
+        <p className="shell-note">
+          Low-orbit satellites can't hover over one place. They pass over it on some orbits. Only geostationary
+          satellites (~36,000 km) stay fixed.
+        </p>
+
         <label className="field">
           <span className="field-label">
             Inclination
@@ -335,14 +573,28 @@ export default function PlacePanel({
                 className="impact-rating"
                 data-tone={tone}
                 aria-describedby="impact-tip"
-                aria-label={`${formatScore(place.score)} out of 100, ${tone}`}
+                aria-label={
+                  scoreForShell
+                    ? `${formatScore(place.score)} out of 100 for the ${shellLabel} shell, every inclination`
+                    : `${formatScore(place.score)} out of 100, ${tone}`
+                }
               >
                 <span className="impact-num num">{formatScore(place.score)}</span>
                 <span className="impact-den">/100</span>
-                <span className="impact-verdict">{tone}</span>
+                <span className="impact-verdict">{scoreForShell ? shellLabel : tone}</span>
               </button>
+              {scoreForShell && (
+                <p className="shell-line">
+                  This score is for the {shellLabel} shell, at every inclination. The list above is which band is
+                  quiet.
+                </p>
+              )}
               <div id="impact-tip" className="impact-tip" role="tooltip">
-                <p>Higher is safer. Score mixes collision harm, how long wreckage stays, and how dense this shell is today.</p>
+                <p>
+                  {scoreForShell
+                    ? `This number ranks the ${shellLabel} shell. It mixes collision harm, how long wreckage stays, and how dense this shell is today. Every inclination in the shell shares it.`
+                    : 'Higher is safer. Score mixes collision harm, how long wreckage stays, and how dense this shell is today.'}
+                </p>
                 <p>
                   Wreckage {yearsLabel(place.dead_sat_lifetime_years)} ·{' '}
                   <span className="num">{formatCollisionCount(place.collisions_per_year)}</span> collisions/yr

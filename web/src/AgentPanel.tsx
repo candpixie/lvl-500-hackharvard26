@@ -16,6 +16,8 @@ const PROMPTS = [
   { label: '1M at 900 km', question: 'What happens if SpaceX puts a million satellites at 900 km?' },
   { label: 'Why 800 km', question: 'Why is 800 km so bad?' },
   { label: 'Near miss', question: "What's the closest near miss this week?" },
+  { label: 'Over China', question: 'Where can I put a satellite over China?' },
+  { label: 'Over Africa', question: 'Where can I put a satellite over Africa at 800 km?' },
 ]
 
 interface AgentPanelProps {
@@ -194,7 +196,9 @@ export default function AgentPanel({ altitude, count, context, onFocus, onUiEven
         (focus.count == null || focus.count === count) && (
         <p className="place-here">
           <span aria-hidden="true">★</span>
-          Put it here · {Math.round(focus.altitude_km)} km · {Math.round(focus.inclination_deg)}°
+          Put it here
+          {focus.place ? ` · ${focus.place}` : ''} · {Math.round(focus.altitude_km)} km ·{' '}
+          {Math.round(focus.inclination_deg)}°
           {focus.count != null
             ? ` · ${focus.count === 1 ? '1 sat' : `${focus.count.toLocaleString('en-US')} sats`}`
             : ''}

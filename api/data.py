@@ -68,6 +68,15 @@ def rank_shells(dims_m: list[float], count: int, top: int = 10) -> list[dict]:
     return json_safe(rank(dims_m, count, top=top))
 
 
+def rank_locations(region: str, altitude_km: float | None = None, top: int = 5) -> dict:
+    """Inclination bands that actually cross a place, quietest debris first."""
+    from locations import explain, rank_over
+
+    payload = json_safe(rank_over(region, altitude_km, top=top))
+    payload["answer"] = explain(payload)
+    return payload
+
+
 @lru_cache(maxsize=1)
 def _object_alts() -> dict[int, dict]:
     path = OUT / "objects.json"
