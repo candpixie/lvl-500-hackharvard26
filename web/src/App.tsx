@@ -15,7 +15,7 @@ import '@fontsource-variable/jost'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import AgentPanel from './AgentPanel.tsx'
-import type { FocusOrbit, Neighborhood } from './events.ts'
+import type { FocusOrbit, Neighborhood, UiEvent } from './events.ts'
 import { imagineGrok, neighborhoodPrompt } from './events.ts'
 import { createFleet, type Fleet } from './fleet.ts'
 import NeighborhoodCard from './NeighborhoodCard.tsx'
@@ -211,11 +211,14 @@ function fleetMaterial(altitudeKm: number) {
   })
 }
 
+const DEFAULT_INCLINATION = 53
+
 export default function App() {
   const hostRef = useRef<HTMLDivElement>(null)
   const applyShellRef = useRef<(altitudeKm: number) => void>(() => {})
   const debrisRef = useRef<(on: boolean) => void>(() => {})
   const flyRef = useRef<(focus: FocusOrbit) => void>(() => {})
+  const selectByNoradRef = useRef<(norad: number) => boolean>(() => false)
   const catalogRef = useRef<CatalogPick | null>(null)
   const vizGen = useRef(0)
   const startVizRef = useRef<(hood: Neighborhood) => void>(() => {})
@@ -234,7 +237,8 @@ export default function App() {
     image: { src: string; label: string } | null
   } | null>(null)
   const [altitude, setAltitude] = useState(START_ALTITUDE)
-  const [inclination, setInclination] = useState(53)
+  const [inclination, setInclination] = useState(DEFAULT_INCLINATION)
+  const [selectedNorad, setSelectedNorad] = useState<number | null>(null)
   const [count, setCount] = useState(1000)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
   const [shellError, setShellError] = useState<string | null>(null)
@@ -434,6 +438,7 @@ export default function App() {
       models.uniforms.uPick.value = -1
       setFact(null)
       setLiveKm(null)
+      setSelectedNorad(null)
     }
     clearPickRef.current = clearPick
 
@@ -461,6 +466,39 @@ export default function App() {
       for (const material of materials) material.uniforms.uHideOutside.value = 1
       clearPick()
     }
+
+    const selectByNorad = (norad: number) => {
+      const index = factsRef.current.findIndex((item) => item.norad === norad)
+      if (index < 0) return false
+      const next = factsRef.current[index]
+      const mean = next.meanKm
+      if (Number.isFinite(mean) && mean > 0) {
+        const shellAlt = Math.min(1950, Math.max(200, Math.round(mean / 10) * 10))
+        setAltitude(shellAlt)
+        altitudeRef.current = shellAlt
+        syncShell(shellAlt)
+      }
+      if (!zoomed) {
+        const pov = globe.pointOfView()
+        globe.pointOfView({ lat: pov.lat, lng: pov.lng, altitude: 0.95 }, 900)
+        zoomed = true
+        showModels(true)
+        setClose(true)
+      }
+      picked = index
+      models.uniforms.uPick.value = index
+      setFact(next)
+      setSelectedNorad(norad)
+      const positions = positionsRef.current
+      if (positions) {
+        const length = Math.hypot(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2])
+        setLiveKm((length / 100 - 1) * 6371)
+      } else {
+        setLiveKm(Number.isFinite(mean) ? mean : null)
+      }
+      return true
+    }
+    selectByNoradRef.current = selectByNorad
 
     globe.onZoom((pov: { altitude: number }) => {
       if (simLiveRef.current) return
@@ -509,7 +547,9 @@ export default function App() {
         }
         const length = Math.hypot(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2])
         setLiveKm((length / 100 - 1) * 6371)
-        setFact(factsRef.current[index] ?? null)
+        const nextFact = factsRef.current[index] ?? null
+        setFact(nextFact)
+        setSelectedNorad(nextFact?.norad ?? null)
       })
     }
     const onPointerLeave = () => {
@@ -677,6 +717,7 @@ export default function App() {
       applyShellRef.current = () => {}
       debrisRef.current = () => {}
       clearPickRef.current = () => {}
+      selectByNoradRef.current = () => false
       cancelAnimationFrame(pickFrame)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerleave', onPointerLeave)
@@ -702,6 +743,26 @@ export default function App() {
       globe._destructor()
     }
   }, [graphics])
+
+  const applyUiEvent = (event: UiEvent) => {
+    if (event.type === 'focusOrbit') {
+      const alt = Math.min(1950, Math.max(200, Math.round(event.altitude_km / 10) * 10))
+      setAltitude(alt)
+      setInclination(event.inclination_deg)
+      flyRef.current({
+        altitude_km: event.altitude_km,
+        inclination_deg: event.inclination_deg,
+      })
+      return
+    }
+    if (event.type === 'selectObject') {
+      selectByNoradRef.current(event.norad)
+      return
+    }
+    if (event.type === 'showApproach') {
+      selectByNoradRef.current(event.norad_1)
+    }
+  }
 
   useEffect(() => {
     altitudeRef.current = altitude
@@ -814,12 +875,12 @@ export default function App() {
       </aside>
       {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
       <AgentPanel
-        onFocus={(focus) => {
-          const next = Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10))
-          setAltitude(next)
-          setInclination(focus.inclination_deg)
-          flyRef.current({ ...focus, altitude_km: next })
+        context={{
+          altitude_km: altitude,
+          inclination_deg: inclination,
+          selected_norad: selectedNorad,
         }}
+        onUiEvent={applyUiEvent}
       />
       {viz && !sim && (
         <NeighborhoodCard

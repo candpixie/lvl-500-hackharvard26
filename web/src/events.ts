@@ -5,18 +5,45 @@ export interface FocusOrbit {
   inclination_deg: number
 }
 
+export type UiEvent =
+  | { type: 'focusOrbit'; altitude_km: number; inclination_deg: number }
+  | { type: 'selectObject'; norad: number }
+  | { type: 'showApproach'; norad_1: number; norad_2: number }
+
+export interface AskContext {
+  altitude_km: number
+  inclination_deg: number
+  selected_norad: number | null
+}
+
 export interface AskResult {
   answer: string
   focus: FocusOrbit | null
+  ui_events?: UiEvent[]
   tool_calls: { name: string; arguments: Record<string, unknown> }[]
   reasoner?: 'chalk' | 'local' | 'local_fallback'
 }
 
-export async function askGrok(question: string): Promise<AskResult> {
+/** Normalize ask payload into a list of UI events (supports legacy `focus` only). */
+export function eventsFromAsk(result: AskResult): UiEvent[] {
+  if (result.ui_events?.length) return result.ui_events
+  if (result.focus) {
+    return [
+      {
+        type: 'focusOrbit',
+        altitude_km: result.focus.altitude_km,
+        inclination_deg: result.focus.inclination_deg,
+      },
+    ]
+  }
+  return []
+}
+
+export async function askGrok(question: string, context?: AskContext): Promise<AskResult> {
   const response = await fetch('/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, context }),
   })
   const payload = (await response.json().catch(() => ({}))) as AskResult & { detail?: string }
   if (!response.ok) {

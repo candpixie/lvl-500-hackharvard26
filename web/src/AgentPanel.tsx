@@ -1,5 +1,13 @@
 import { useRef, useState } from 'react'
-import { askGrok, imagineGrok, listenGrok, speakGrok, type FocusOrbit } from './events.ts'
+import {
+  askGrok,
+  eventsFromAsk,
+  imagineGrok,
+  listenGrok,
+  speakGrok,
+  type AskContext,
+  type UiEvent,
+} from './events.ts'
 
 const PROMPTS = [
   { label: '1,000 sats', question: 'Where should I put 1,000 four-meter satellites?' },
@@ -9,10 +17,11 @@ const PROMPTS = [
 ]
 
 interface AgentPanelProps {
-  onFocus: (focus: FocusOrbit) => void
+  context: AskContext
+  onUiEvent: (event: UiEvent) => void
 }
 
-export default function AgentPanel({ onFocus }: AgentPanelProps) {
+export default function AgentPanel({ context, onUiEvent }: AgentPanelProps) {
   const [question, setQuestion] = useState(PROMPTS[0].question)
   const [answer, setAnswer] = useState('')
   const [sources, setSources] = useState<string[]>([])
@@ -41,30 +50,39 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
     }
     setHasAudio(false)
     try {
-      const result = await askGrok(q)
+      const result = await askGrok(q, context)
       setAnswer(result.answer)
       setSources(result.tool_calls.map((call) => call.name))
       setReasoner(result.reasoner ?? '')
-      if (result.focus) onFocus(result.focus)
-      void imagineGrok(
-        result.focus
-          ? `Low Earth orbit shell at ${Math.round(result.focus.altitude_km)} km, inclination ${Math.round(result.focus.inclination_deg)} degrees`
-          : "Low Earth orbit with satellites and amber debris around Earth",
-      )
-        .then((art) => {
-          const src = art.url ?? (art.b64_json ? `data:image/png;base64,${art.b64_json}` : '')
-          if (src) setImage({ src, label: art.label })
-        })
-        .catch(() => {})
+      for (const event of eventsFromAsk(result)) onUiEvent(event)
+
+      const localOnly = result.reasoner === 'local' || result.reasoner === 'local_fallback'
+      if (!localOnly) {
+        void imagineGrok(
+          result.focus
+            ? `Low Earth orbit shell at ${Math.round(result.focus.altitude_km)} km, inclination ${Math.round(result.focus.inclination_deg)} degrees`
+            : 'Low Earth orbit with satellites and amber debris around Earth',
+        )
+          .then((art) => {
+            const src = art.url ?? (art.b64_json ? `data:image/png;base64,${art.b64_json}` : '')
+            if (src) setImage({ src, label: art.label })
+          })
+          .catch(() => {})
+      }
+
       if (speak && result.answer) {
-        const blob = await speakGrok(result.answer)
-        const url = URL.createObjectURL(blob)
-        objectUrl.current = url
-        const player = playerRef.current
-        if (player) {
-          player.src = url
-          setHasAudio(true)
-          void player.play()
+        try {
+          const blob = await speakGrok(result.answer)
+          const url = URL.createObjectURL(blob)
+          objectUrl.current = url
+          const player = playerRef.current
+          if (player) {
+            player.src = url
+            setHasAudio(true)
+            void player.play()
+          }
+        } catch {
+          // No XAI key / voice unavailable — answer and globe events still succeed.
         }
       }
     } catch (err) {
@@ -112,11 +130,14 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
     }
   }
 
-  const sourceLine = reasoner === 'chalk'
-    ? `Chalk · ${sources.filter((name) => name !== 'ask_chalk').join(', ') || 'ask_chalk'}`
-    : reasoner === 'local_fallback'
-      ? `Local fallback · ${sources.join(', ')}`
-      : sources.join(', ')
+  const sourceLine =
+    reasoner === 'chalk'
+      ? `Chalk · ${sources.filter((name) => name !== 'ask_chalk').join(', ') || 'ask_chalk'}`
+      : reasoner === 'local_fallback'
+        ? `Local fallback · ${sources.join(', ')}`
+        : reasoner === 'local'
+          ? `Local · ${sources.join(', ')}`
+          : sources.join(', ')
 
   return (
     <aside className="hud hud-agent">
@@ -124,7 +145,13 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
         <p className="kicker">Grok</p>
         <div className="chips">
         {PROMPTS.map((item) => (
-          <button key={item.label} type="button" className="chip" disabled={busy} onClick={() => setQuestion(item.question)}>
+          <button
+            key={item.label}
+            type="button"
+            className="chip"
+            disabled={busy}
+            onClick={() => setQuestion(item.question)}
+          >
             {item.label}
           </button>
         ))}
@@ -144,6 +171,9 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
         />
         <button type="button" className="ask-go" disabled={busy} onClick={() => void run(false)}>
           {busy ? 'Asking…' : 'Ask'}
+        </button>
+        <button type="button" className="ask-go ask-voice" disabled={busy} onClick={() => void run(true)}>
+          Ask + speak
         </button>
         <button type="button" className="ask-go ask-voice" disabled={busy && !listening} onClick={() => void toggleListen()}>
           {listening ? 'Stop' : 'Talk'}
