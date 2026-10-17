@@ -238,6 +238,7 @@ export default function App() {
   const [altitudeChosen, setAltitudeChosen] = useState(false)
   const [inclination, setInclination] = useState(53)
   const [count, setCount] = useState(1000)
+  const [size, setSize] = useState(4)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
   const [shellError, setShellError] = useState<string | null>(null)
   const [debrisOnly, setDebrisOnly] = useState(false)
@@ -247,7 +248,10 @@ export default function App() {
   const [liveKm, setLiveKm] = useState<number | null>(null)
   const [graphics] = useState<'ok' | 'missing'>(() => (webglAvailable() ? 'ok' : 'missing'))
   const altitudeRef = useRef(altitude)
+  const inclinationRef = useRef(inclination)
   const debrisOnlyRef = useRef(debrisOnly)
+  const ignoreSliderUntil = useRef(0)
+  const applyAskFocusRef = useRef<(focus: FocusOrbit | null) => void>(() => {})
   const clearPickRef = useRef<() => void>(() => {})
 
   function startViz(hood: Neighborhood) {
@@ -726,6 +730,10 @@ export default function App() {
   }, [altitude])
 
   useEffect(() => {
+    inclinationRef.current = inclination
+  }, [inclination])
+
+  useEffect(() => {
     debrisOnlyRef.current = debrisOnly
     debrisRef.current(debrisOnly)
   }, [debrisOnly])
@@ -752,6 +760,28 @@ export default function App() {
     void load()
   }, [])
 
+  useEffect(() => {
+    applyAskFocusRef.current = (focus) => {
+      if (!focus) {
+        flyRef.current({ altitude_km: altitudeRef.current, inclination_deg: inclinationRef.current })
+        return
+      }
+      const next = Math.min(1950, Math.max(200, Math.round(focus.altitude_km)))
+      ignoreSliderUntil.current = Date.now() + 500
+      setAltitude(next)
+      setAltitudeChosen(true)
+      setInclination(focus.inclination_deg)
+      if (typeof focus.count === 'number' && Number.isFinite(focus.count) && focus.count > 0) {
+        setCount(Math.round(focus.count))
+      }
+      const length = focus.dims_m?.[0]
+      if (typeof length === 'number' && Number.isFinite(length)) {
+        setSize(Math.min(20, Math.max(1, length)))
+      }
+      flyRef.current({ ...focus, altitude_km: next }, { pin: true, look: true })
+    }
+  })
+
   const overlay =
     graphics === 'missing' ? (
       <div className="status status-error">This view needs WebGL. The orbit map cannot draw without it.</div>
@@ -767,15 +797,11 @@ export default function App() {
       <aside className="hud">
         <p className="kicker">Orbit Payback</p>
         <h1>How crowded is this altitude?</h1>
-        <p className="dek">
-          {close
-            ? 'Point at a satellite. Click to visualize its neighborhood.'
-            : 'Place a constellation. Click a dot to visualize its neighborhood.'}
-        </p>
+        <p className="dek">{close ? 'Point at a satellite. Not to scale.' : 'Set a shell, or click a dot.'}</p>
         <p className="asof">
           {epoch ? (
             <>
-              Data as of <span className="num">{formatEpoch(epoch)}</span>
+              CelesTrak GP · <span className="num">{formatEpoch(epoch)}</span>
             </>
           ) : (
             'CelesTrak GP'
@@ -786,10 +812,12 @@ export default function App() {
           altitudeChosen={altitudeChosen}
           inclination={inclination}
           count={count}
+          size={size}
           shells={shells}
           shellError={shellError}
           debrisOnly={debrisOnly}
           onAltitude={(value) => {
+            if (Date.now() < ignoreSliderUntil.current) return
             setAltitude(value)
             setAltitudeChosen(true)
             flyRef.current({ altitude_km: value, inclination_deg: inclination })
@@ -799,6 +827,7 @@ export default function App() {
             flyRef.current({ altitude_km: altitude, inclination_deg: value })
           }}
           onCount={setCount}
+          onSize={setSize}
           onDebrisOnly={setDebrisOnly}
           onScene={(scene) => {
             setAltitude(scene.altitude)
@@ -834,21 +863,13 @@ export default function App() {
             </li>
           ))}
         </ul>
-        <p className="source">CelesTrak GP</p>
+        <p className="source">Tracked objects only, lower bound</p>
       </aside>
       {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
       <AgentPanel
-        onFocus={(focus) => {
-          if (!focus) {
-            flyRef.current({ altitude_km: altitude, inclination_deg: inclination })
-            return
-          }
-          const next = Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10))
-          setAltitude(next)
-          setAltitudeChosen(true)
-          setInclination(focus.inclination_deg)
-          flyRef.current({ ...focus, altitude_km: next }, { pin: true, look: true })
-        }}
+        altitude={altitude}
+        count={count}
+        onFocus={(focus) => applyAskFocusRef.current(focus)}
       />
       {viz && !sim && (
         <NeighborhoodCard

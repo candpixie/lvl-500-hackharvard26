@@ -254,6 +254,13 @@ h1 {
   margin-top: 12px;
 }
 
+.shell-line {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(201, 214, 227, 0.74);
+}
+
 .saved-list {
   margin: 8px 0 0;
   padding: 0;
@@ -350,6 +357,88 @@ h1 {
 
 .beat-presets {
   margin-top: 12px;
+}
+
+.step-impact {
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.impact-score {
+  margin-top: 2px;
+}
+
+.impact-rating {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #e7f27a;
+  cursor: help;
+  text-align: left;
+}
+
+.impact-rating[data-tone='mixed'] {
+  color: #c9d6e3;
+}
+
+.impact-rating[data-tone='crowded'] {
+  color: #f2a541;
+}
+
+.impact-empty {
+  cursor: default;
+  color: rgba(201, 214, 227, 0.55);
+}
+
+.impact-num {
+  font-size: 56px;
+  font-weight: 500;
+  letter-spacing: -0.07em;
+  line-height: 0.85;
+}
+
+.impact-den {
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.5;
+}
+
+.impact-verdict {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.impact-tip {
+  display: none;
+  margin-top: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #c9d6e3;
+  background: rgba(5, 7, 11, 0.92);
+  border: 1px solid rgba(231, 242, 122, 0.35);
+}
+
+.impact-score:hover .impact-tip,
+.impact-score:focus-within .impact-tip {
+  display: block;
+}
+
+.impact-tip p {
+  margin: 0;
+}
+
+.impact-tip p + p {
+  margin-top: 8px;
+  color: rgba(201, 214, 227, 0.62);
 }
 
 .miss-card {

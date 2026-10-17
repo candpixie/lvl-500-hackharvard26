@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { askGrok, imagineGrok, listenGrok, speakGrok, type FocusOrbit } from './events.ts'
+import { askGrok, focusWithMission, imagineGrok, listenGrok, speakGrok, type FocusOrbit } from './events.ts'
 
 const PROMPTS = [
   { label: '1,000 sats', question: 'Where should I put 1,000 four-meter satellites?' },
@@ -9,10 +9,12 @@ const PROMPTS = [
 ]
 
 interface AgentPanelProps {
+  altitude: number
+  count: number
   onFocus: (focus: FocusOrbit | null) => void
 }
 
-export default function AgentPanel({ onFocus }: AgentPanelProps) {
+export default function AgentPanel({ altitude, count, onFocus }: AgentPanelProps) {
   const [question, setQuestion] = useState(PROMPTS[0].question)
   const [answer, setAnswer] = useState('')
   const [sources, setSources] = useState<string[]>([])
@@ -48,9 +50,10 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
       setAnswer(result.answer)
       setSources(result.tool_calls.map((call) => call.name))
       setReasoner(result.reasoner ?? '')
-      if (result.focus) {
-        setFocus(result.focus)
-        onFocus(result.focus)
+      const nextFocus = focusWithMission(result)
+      if (nextFocus) {
+        setFocus(nextFocus)
+        onFocus(nextFocus)
       }
       void imagineGrok(
         result.focus
@@ -156,10 +159,15 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
         </button>
       </div>
       {error && <p className="shell-note">{error}</p>}
-      {focus && (
+      {focus &&
+        Math.abs(focus.altitude_km - altitude) < 25 &&
+        (focus.count == null || focus.count === count) && (
         <p className="place-here">
           <span aria-hidden="true">★</span>
           Put it here · {Math.round(focus.altitude_km)} km · {Math.round(focus.inclination_deg)}°
+          {focus.count != null
+            ? ` · ${focus.count === 1 ? '1 sat' : `${focus.count.toLocaleString('en-US')} sats`}`
+            : ''}
         </p>
       )}
       {answer && <p className="answer">{answer}</p>}

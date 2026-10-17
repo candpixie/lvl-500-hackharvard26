@@ -268,28 +268,87 @@ def _text_from_response(response) -> str:
     return "\n".join(chunks).strip()
 
 
+def _mission_from_args(args: Any) -> dict:
+    out: dict = {}
+    if not isinstance(args, dict):
+        return out
+    if args.get("count") is not None:
+        try:
+            count = int(args["count"])
+        except (TypeError, ValueError):
+            count = 0
+        if count > 0:
+            out["count"] = count
+    dims = args.get("dims_m")
+    if isinstance(dims, (list, tuple)) and dims:
+        try:
+            out["dims_m"] = [float(x) for x in dims]
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def _mission_from_calls(tool_calls: list) -> dict:
+    """Count/size from rank/place only when that is the first tool, not a why-style extra rank."""
+    if not tool_calls or not isinstance(tool_calls[0], dict):
+        return {}
+    first = tool_calls[0]
+    if first.get("name") in {"rank_shells", "place_satellites"}:
+        return _mission_from_args(first.get("arguments"))
+    return {}
+
+
+def _attach_mission(focus: dict | None, *missions: dict) -> dict | None:
+    if not focus:
+        return None
+    out = dict(focus)
+    for mission in missions:
+        for key, value in mission.items():
+            if key not in out and value is not None:
+                out[key] = value
+    return out
+
+
+def _fill_mission(focus: dict | None, tool_calls: list[dict]) -> dict | None:
+    """If Chalk omitted count, copy it from a rank/place call Grok made in the same turn."""
+    if not focus or focus.get("count") is not None:
+        return focus
+    for call in tool_calls:
+        if call.get("name") in {"rank_shells", "place_satellites"}:
+            return _attach_mission(focus, _mission_from_args(call.get("arguments")))
+    return focus
+
+
 def _focus_from_calls(tool_calls: list[dict]) -> dict | None:
+    chalk_focus = None
     rank_focus = None
     place_focus = None
     other = None
     for call in tool_calls:
         name, result = call["name"], call["result"]
+        args = call.get("arguments") or {}
         if name == "ask_chalk" and chalk_ok(result):
             raw = result.get("focus")
-            if isinstance(raw, dict) and raw.get("altitude_km") is not None:
-                return {
-                    "altitude_km": raw["altitude_km"],
-                    "inclination_deg": raw.get("inclination_deg", DEFAULT_INC_DEG),
-                }
             nested = result.get("tool_calls") or []
-            if isinstance(nested, list):
+            nested_mission = _mission_from_calls(nested) if isinstance(nested, list) else {}
+            raw_mission = _mission_from_args(raw)
+            if isinstance(raw, dict) and raw.get("altitude_km") is not None:
+                chalk_focus = _attach_mission(
+                    {
+                        "altitude_km": raw["altitude_km"],
+                        "inclination_deg": raw.get("inclination_deg", DEFAULT_INC_DEG),
+                    },
+                    raw_mission,
+                    nested_mission,
+                )
+            elif isinstance(nested, list):
                 found = _focus_from_calls(nested)
                 if found:
-                    return found
+                    chalk_focus = _attach_mission(found, nested_mission)
         if name == "rank_shells" and isinstance(result, list):
-            rank_focus = focus_from_rank(result) or rank_focus
+            rank_focus = _attach_mission(focus_from_rank(result), _mission_from_args(args)) or rank_focus
         elif name == "place_satellites" and isinstance(result, dict) and "alt_km" in result:
-            place_focus = focus_from_place(result)
+            place_focus = _attach_mission(focus_from_place(result), _mission_from_args(args))
         elif name == "get_shell_crowding" and isinstance(result, dict) and "alt_lo" in result and other is None:
             other = {
                 "altitude_km": (result["alt_lo"] + result["alt_hi"]) / 2,
@@ -302,7 +361,7 @@ def _focus_from_calls(tool_calls: list[dict]) -> dict | None:
                 other = {"altitude_km": alt, "inclination_deg": DEFAULT_INC_DEG}
         elif name in REMOTE_FUNCTIONS and other is None:
             other = _focus_from_remote(name, result)
-    return rank_focus or place_focus or other
+    return _fill_mission(chalk_focus or rank_focus or place_focus or other, tool_calls)
 
 
 def _focus_from_remote(name: str, result: Any) -> dict | None:

@@ -3,13 +3,75 @@
 export interface FocusOrbit {
   altitude_km: number
   inclination_deg: number
+  count?: number
+  dims_m?: number[]
+}
+
+export interface AskToolCall {
+  name: string
+  arguments?: Record<string, unknown>
+  result?: unknown
 }
 
 export interface AskResult {
   answer: string
   focus: FocusOrbit | null
-  tool_calls: { name: string; arguments: Record<string, unknown> }[]
+  tool_calls: AskToolCall[]
   reasoner?: 'chalk' | 'local' | 'local_fallback'
+}
+
+function missionFromArgs(args: Record<string, unknown> | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
+  if (!args) return {}
+  const next: Pick<FocusOrbit, 'count' | 'dims_m'> = {}
+  if (typeof args.count === 'number' && Number.isFinite(args.count) && args.count > 0) {
+    next.count = Math.round(args.count)
+  }
+  if (Array.isArray(args.dims_m) && args.dims_m.length > 0) {
+    const dims = args.dims_m.map(Number).filter((value) => Number.isFinite(value))
+    if (dims.length > 0) next.dims_m = dims
+  }
+  return next
+}
+
+function missionFromCalls(calls: AskToolCall[] | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
+  if (!calls?.length) return {}
+  const first = calls[0]
+  if (first.name !== 'rank_shells' && first.name !== 'place_satellites') return {}
+  return missionFromArgs(first.arguments)
+}
+
+function missionFromAny(calls: AskToolCall[] | undefined): Pick<FocusOrbit, 'count' | 'dims_m'> {
+  if (!calls) return {}
+  for (const call of calls) {
+    if (call.name === 'rank_shells' || call.name === 'place_satellites') {
+      return missionFromArgs(call.arguments)
+    }
+  }
+  return {}
+}
+
+/** Copy count/size from Ask onto focus so the HUD scores the same mission. */
+export function focusWithMission(result: AskResult): FocusOrbit | null {
+  if (!result.focus) return null
+  let count = result.focus.count
+  let dims = result.focus.dims_m
+  const chalk = result.tool_calls.find((call) => call.name === 'ask_chalk')
+  const body = chalk?.result
+  if (body && typeof body === 'object') {
+    const nested = body as { focus?: FocusOrbit; tool_calls?: AskToolCall[] }
+    const fromChalk = missionFromCalls(nested.tool_calls)
+    count ??= nested.focus?.count ?? fromChalk.count
+    dims ??= nested.focus?.dims_m ?? fromChalk.dims_m
+  }
+  const fromLocal = missionFromCalls(result.tool_calls)
+  const fromAny = missionFromAny(result.tool_calls)
+  count ??= fromLocal.count ?? fromAny.count
+  dims ??= fromLocal.dims_m ?? fromAny.dims_m
+  return {
+    ...result.focus,
+    ...(count != null ? { count } : {}),
+    ...(dims ? { dims_m: dims } : {}),
+  }
 }
 
 export async function askGrok(question: string): Promise<AskResult> {
