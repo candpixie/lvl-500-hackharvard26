@@ -5,6 +5,22 @@ export interface OrbitCounts {
   unknown: number
 }
 
+export interface ObjectFact {
+  name: string
+  norad: number
+  type: keyof OrbitCounts
+  owner: string | null
+  launch: string | null
+  apogee: number | null
+  perigee: number | null
+  meanKm: number
+  inclination: number | null
+  radar: number | null
+  constellation: string | null
+  groups: string[]
+  sourceGroup: string
+}
+
 export type WorkerOut =
   | {
       kind: 'ready'
@@ -15,9 +31,8 @@ export type WorkerOut =
       positions: Float32Array
       altitudes: Float32Array
       kinds: Float32Array
-      names: string[]
-      types: string[]
       epoch: string
+      facts: ObjectFact[]
     }
   | { kind: 'positions'; positions: Float32Array }
   | { kind: 'error'; message: string }

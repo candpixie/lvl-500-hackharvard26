@@ -3,22 +3,46 @@ body,
 #root {
   margin: 0;
   height: 100%;
+  min-height: 100dvh;
   background: #05070b;
   overflow: hidden;
 }
 
 body {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-family: 'IBM Plex Sans', ui-sans-serif, sans-serif;
   color: #c9d6e3;
 }
 
 .viewport {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100dvh;
 }
 
 .viewport canvas {
   display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.kicker,
+.asof,
+.legend,
+.source,
+.shell-count,
+.shell-range,
+.shell-majority,
+.shell-note,
+.scale-note,
+.field,
+.debris-toggle,
+.inspect-type,
+.inspect-id,
+.inspect dt,
+.inspect dd,
+.status {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
 .hud {
@@ -47,7 +71,8 @@ body {
 }
 
 .kicker,
-.asof {
+.asof,
+.scale-note {
   margin: 0;
   font-size: 11px;
   letter-spacing: 0.14em;
@@ -75,7 +100,8 @@ h1 {
   color: rgba(201, 214, 227, 0.74);
 }
 
-.asof {
+.asof,
+.scale-note {
   margin-top: 6px;
   color: rgba(201, 214, 227, 0.48);
 }
@@ -402,6 +428,86 @@ h1 {
   margin-top: 16px;
 }
 
+.inspect {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 2;
+  width: min(240px, calc(100vw - 48px));
+  margin: 0;
+  pointer-events: none;
+  text-align: right;
+}
+
+.inspect::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(340px, 48vw);
+  background: linear-gradient(270deg, rgba(5, 7, 11, 0.9) 0%, rgba(5, 7, 11, 0.55) 58%, rgba(5, 7, 11, 0) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.inspect-type,
+.inspect-id,
+.inspect h2,
+.inspect dl,
+.inspect dt,
+.inspect dd {
+  margin: 0;
+}
+
+.inspect-type {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.inspect h2 {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+}
+
+.inspect-id {
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(201, 214, 227, 0.5);
+}
+
+.inspect dl {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.inspect dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.inspect dt {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(201, 214, 227, 0.48);
+}
+
+.inspect dd {
+  font-size: 13px;
+}
+
+.inspect .source {
+  margin-top: 14px;
+}
+
 .hud-agent {
   left: auto;
   right: 24px;
@@ -548,7 +654,9 @@ h1 {
 
 body.is-sim .hud,
 body.is-sim .hud-agent,
-body.is-sim .hud::before {
+body.is-sim .hud::before,
+body.is-sim .inspect,
+body.is-sim .inspect::before {
   display: none;
 }
 
