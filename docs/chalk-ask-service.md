@@ -1,5 +1,7 @@
 # Chalk ask service (the `CHALK_ASK_URL` endpoint)
 
+> Just connecting your API? Follow **`docs/chalk-quickstart.md`** (five minutes). This page is the reference.
+
 Built by Person A to satisfy `docs/chalk-contract.md`. Grok's `ask_chalk` tool posts the user's question here; this service runs the team's own `pipeline/scoring.py` (`rank`, `place`) and shell data, plus the SOCRATES near misses, and returns `{answer, focus, tool_calls, note}`. No LLM runs inside it, so answers are repeatable.
 
 ## Live
