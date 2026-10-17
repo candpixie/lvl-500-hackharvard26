@@ -678,6 +678,22 @@ h1 {
   cursor: wait;
 }
 
+.place-here {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: #f5c542;
+}
+
+.place-here span {
+  font-size: 22px;
+  line-height: 1;
+}
+
 .answer {
   margin: 12px 0 0;
   font-size: 13px;

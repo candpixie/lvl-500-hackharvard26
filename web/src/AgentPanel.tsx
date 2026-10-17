@@ -9,7 +9,7 @@ const PROMPTS = [
 ]
 
 interface AgentPanelProps {
-  onFocus: (focus: FocusOrbit) => void
+  onFocus: (focus: FocusOrbit | null) => void
 }
 
 export default function AgentPanel({ onFocus }: AgentPanelProps) {
@@ -22,6 +22,7 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [hasAudio, setHasAudio] = useState(false)
   const [image, setImage] = useState<{ src: string; label: string } | null>(null)
+  const [focus, setFocus] = useState<FocusOrbit | null>(null)
   const playerRef = useRef<HTMLAudioElement>(null)
   const objectUrl = useRef<string | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -35,6 +36,8 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
     setSources([])
     setReasoner('')
     setImage(null)
+    setFocus(null)
+    onFocus(null)
     if (objectUrl.current) {
       URL.revokeObjectURL(objectUrl.current)
       objectUrl.current = null
@@ -45,7 +48,10 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
       setAnswer(result.answer)
       setSources(result.tool_calls.map((call) => call.name))
       setReasoner(result.reasoner ?? '')
-      if (result.focus) onFocus(result.focus)
+      if (result.focus) {
+        setFocus(result.focus)
+        onFocus(result.focus)
+      }
       void imagineGrok(
         result.focus
           ? `Low Earth orbit shell at ${Math.round(result.focus.altitude_km)} km, inclination ${Math.round(result.focus.inclination_deg)} degrees`
@@ -150,6 +156,12 @@ export default function AgentPanel({ onFocus }: AgentPanelProps) {
         </button>
       </div>
       {error && <p className="shell-note">{error}</p>}
+      {focus && (
+        <p className="place-here">
+          <span aria-hidden="true">★</span>
+          Put it here · {Math.round(focus.altitude_km)} km · {Math.round(focus.inclination_deg)}°
+        </p>
+      )}
       {answer && <p className="answer">{answer}</p>}
       {sources.length > 0 && (
         <p className="source" title="Tracked objects only, lower bound. CelesTrak SATCAT, GP, SOCRATES.">

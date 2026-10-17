@@ -10,6 +10,7 @@ import {
   ShaderMaterial,
   Vector3,
   type MeshPhongMaterial,
+  type SpriteMaterial,
 } from 'three'
 import '@fontsource-variable/jost'
 import '@fontsource-variable/geist'
@@ -22,7 +23,7 @@ import NeighborhoodCard from './NeighborhoodCard.tsx'
 import ObjectCard from './ObjectCard.tsx'
 import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
-import { orbitLine, ORBIT_COLOR } from './place.ts'
+import { goldStarSprite, orbitLine, ORBIT_COLOR } from './place.ts'
 import {
   exaggeratePoint,
   neighborhoodAround,
@@ -215,7 +216,7 @@ export default function App() {
   const hostRef = useRef<HTMLDivElement>(null)
   const applyShellRef = useRef<(altitudeKm: number) => void>(() => {})
   const debrisRef = useRef<(on: boolean) => void>(() => {})
-  const flyRef = useRef<(focus: FocusOrbit) => void>(() => {})
+  const flyRef = useRef<(focus: FocusOrbit, opts?: { pin?: boolean; look?: boolean }) => void>(() => {})
   const catalogRef = useRef<CatalogPick | null>(null)
   const vizGen = useRef(0)
   const startVizRef = useRef<(hood: Neighborhood) => void>(() => {})
@@ -391,9 +392,6 @@ export default function App() {
         material.uniforms.uShellMin.value = bounds.min
         material.uniforms.uShellMax.value = bounds.max
       }
-      if (simLiveRef.current) return
-      const realRel = Math.min(Math.max(altitudeKm, 0) / 6371, 0.5)
-      controls.minDistance = 100 * (1 + realRel * ALTITUDE_EXAGGERATION) + 22
     }
     applyShellRef.current = syncShell
     debrisRef.current = (on) => {
@@ -403,9 +401,12 @@ export default function App() {
 
     let orbit: Line | null = null
     const orbitMaterial = new LineBasicMaterial({ color: ORBIT_COLOR, transparent: true, opacity: 0.9 })
-    flyRef.current = (focus) => {
+    const star = goldStarSprite()
+    globe.scene().add(star)
+    let pinOn = false
+    flyRef.current = (focus, opts = {}) => {
       if (simLiveRef.current) return
-      const { positions } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
+      const { positions, marker } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
       if (orbit) {
         globe.scene().remove(orbit)
         orbit.geometry.dispose()
@@ -414,8 +415,16 @@ export default function App() {
       geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
       orbit = new Line(geometry, orbitMaterial)
       globe.scene().add(orbit)
+      star.position.set(marker[0], marker[1], marker[2])
+      pinOn = Boolean(opts.pin)
+      star.visible = pinOn
+      if (!opts.look) return
+      const pov = globe.pointOfView() as { lat?: number; lng?: number; altitude?: number }
       const lat = Math.max(-55, Math.min(55, 90 - focus.inclination_deg))
-      globe.pointOfView({ lat, lng: 20, altitude: 1.45 }, 1400)
+      globe.pointOfView(
+        { lat, lng: pov.lng ?? 20, altitude: typeof pov.altitude === 'number' ? pov.altitude : 1.65 },
+        700,
+      )
     }
 
     globe.renderer().domElement.addEventListener('webglcontextlost', (event: Event) => {
@@ -459,6 +468,8 @@ export default function App() {
     const hideForSim = () => {
       if (cloud) cloud.visible = false
       fleet?.setVisible(false)
+      if (orbit) orbit.visible = false
+      star.visible = false
       for (const material of materials) material.uniforms.uHideOutside.value = 1
       clearPick()
     }
@@ -587,9 +598,10 @@ export default function App() {
       dots.uniforms.uSize.value = POINT_SIZE
       showModels(zoomed)
       setClose(zoomed)
+      if (orbit) orbit.visible = true
+      star.visible = pinOn
       syncShell(altitudeRef.current)
       fit()
-      globe.pointOfView({ lat: 18, lng: 12, altitude: 1.65 }, 900)
     }
 
     const worker = new Worker(new URL('./propagate.worker.ts', import.meta.url), { type: 'module' })
@@ -698,6 +710,10 @@ export default function App() {
       models.dispose()
       orbitMaterial.dispose()
       orbit?.geometry.dispose()
+      const starMaterial = star.material as SpriteMaterial
+      starMaterial.map?.dispose()
+      starMaterial.dispose()
+      star.removeFromParent()
       cloud?.geometry.dispose()
       fleet?.dispose()
       globe._destructor()
@@ -823,11 +839,15 @@ export default function App() {
       {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
       <AgentPanel
         onFocus={(focus) => {
+          if (!focus) {
+            flyRef.current({ altitude_km: altitude, inclination_deg: inclination })
+            return
+          }
           const next = Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10))
           setAltitude(next)
           setAltitudeChosen(true)
           setInclination(focus.inclination_deg)
-          flyRef.current({ ...focus, altitude_km: next })
+          flyRef.current({ ...focus, altitude_km: next }, { pin: true, look: true })
         }}
       />
       {viz && !sim && (
