@@ -10,6 +10,7 @@ import {
   type PlaceResult,
   type RankRow,
 } from './events.ts'
+import { bandNeighbors, presetOrbit, type BandGrid } from './launchKinds.ts'
 import { majorityLabel, shellForAltitude, shellRange, shellTotal, type ShellRow } from './shells.ts'
 
 const PLACE_CHIPS = ['Africa', 'China', 'Europe']
@@ -160,8 +161,10 @@ export default function PlacePanel({
   const [openSaveId, setOpenSaveId] = useState<number | null>(null)
   const [touched, setTouched] = useState(false)
   const [kinds, setKinds] = useState<LaunchKind[]>([])
+  const [grid, setGrid] = useState<BandGrid | null>(null)
   const [kindKey, setKindKey] = useState('')
   const kind = kinds.find((row) => row.kind === kindKey) ?? null
+  const neighbors = kind && grid ? bandNeighbors(grid, altitude, inclination) : null
   const dims = dimsFor(size)
   const ready = altitudeChosen || touched
   const tone = ready && place ? scoreTone(place.score) : null
@@ -212,14 +215,23 @@ export default function PlacePanel({
   useEffect(() => {
     fetch('/launch_kinds.json')
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
-      .then((payload: { kinds?: LaunchKind[] }) => setKinds(payload.kinds ?? []))
-      .catch(() => setKinds([]))
+      .then((payload: { kinds?: LaunchKind[]; band_grid?: BandGrid }) => {
+        setKinds(payload.kinds ?? [])
+        setGrid(payload.band_grid ?? null)
+      })
+      .catch(() => {
+        setKinds([])
+        setGrid(null)
+      })
   }, [])
 
   function chooseKind(key: string) {
     setKindKey(key)
+    const row = kinds.find((item) => item.kind === key)
+    if (!row) return // Custom: leave the sliders where the user put them
+    const next = presetOrbit(row.altitude_km.median, row.inclination_deg_median)
+    onScene({ altitude: next.altitude, inclination: next.inclination })
   }
-
 
   useEffect(() => {
     const name = placeName?.trim()
@@ -354,6 +366,22 @@ export default function PlacePanel({
             <span className="num">{kind.close_approaches_per_object}</span> predicted close approaches each this
             week, against <span className="num">{kind.all_leo_close_approaches_per_object}</span> for the average
             object in low orbit. Observed for existing objects, not a forecast for yours. SOCRATES, one week.
+          </p>
+        )}
+        {kind && neighbors && (
+          <p className="shell-line kind-line" title={grid?.note}>
+            In this orbit's band ({neighbors.incLo}–{neighbors.incHi}°): about{' '}
+            <span className="num">{formatCount(neighbors.inBand)}</span> of the{' '}
+            <span className="num">{formatCount(neighbors.wholeShell)}</span> tracked objects in the{' '}
+            {neighbors.shellLo.toLocaleString('en-US')}–{neighbors.shellHi.toLocaleString('en-US')} km shell
+            {neighbors.inBand > 0 ? (
+              <>
+                , <span className="num">{formatCount(neighbors.debrisInBand)}</span> of them debris
+              </>
+            ) : (
+              <>. None are tracked there, which is not the same as empty: small debris is not tracked</>
+            )}
+            . Tracked objects only, a lower bound.
           </p>
         )}
         <label className="field">
