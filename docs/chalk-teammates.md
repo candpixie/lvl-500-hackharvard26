@@ -111,20 +111,24 @@ Which tool for which question:
 
 ## 4. Hook it to David’s API
 
-On the machine running `uv run uvicorn api.main:app --reload --port 8000`, add to `.env`:
+On the machine running `uv run uvicorn api.main:app --reload --port 8000`, add to the gitignored `.env` (never `VITE_*`):
 
 ```
-CHALK_ASK_URL=https://your-host/ask
+CHALK_ASK_URL=
 CHALK_TOKEN=
-CHALK_ENV_ID=
+CHALK_ENV_ID=spcwce09a241
 ```
+
+`CHALK_ASK_URL` stays empty until you send the POST URL. `spcwce09a241` is the environment id, not a secret. The client times out at 5 seconds. The bearer is attached only for `https://`, and for `http://` on localhost, `127.0.0.1`, or `::1`.
 
 Restart uvicorn. Check:
 
 ```sh
 curl -s http://127.0.0.1:8000/health
-# "chalk": true, "reasoner": "chalk"
+# "chalk": true, "reasoner": "chalk"   once the URL answers
 ```
+
+Health GETs `CHALK_ASK_URL` and does not send a question. 405 still counts as up. `"chalk": false` with no `chalk_error` means the URL is empty. `chalk_error` of `unreachable`, `auth`, `not_found`, or `http_5xx` means the probe failed. Response bodies are not returned.
 
 Then:
 
@@ -136,7 +140,11 @@ curl -s -X POST http://127.0.0.1:8000/ask \
 
 You want `"reasoner":"chalk"` and `focus.altitude_km` near 525. The globe at `http://127.0.0.1:5173` should fly there.
 
-If health still says `"chalk": false`, `CHALK_ASK_URL` is empty or the API was not restarted.
+If health still says `"chalk": false` and there is no `chalk_error`, `CHALK_ASK_URL` is empty or the API was not restarted.
+
+Your function envelope `{ok, data, coverage, caveats, snapshot_id}` is not the `/ask` body. HTTP `/ask` must still return `{answer, focus, tool_calls}`. The three deployed functions can also be called directly: set `CHALK_REMOTE_FUNCTIONS=1` and install `chalkcompute`. Grok then gets `shell_crowding`, `objects_near`, and `close_approaches` via `RemoteFunction.from_name`. `recommend_orbit` is not wired. `rank_shells` and `place_satellites` stay the local placement tools.
+
+For the eval task, import `run_agent(question, history, context)` from `agent`. It calls the same loop as `/ask` and does not store history. The return is the `/ask` object plus `ui_events`.
 
 ## 5. Eval (this is the Chalk prize)
 

@@ -21,6 +21,7 @@ const COLOR: Record<keyof OrbitCounts, readonly [number, number, number]> = {
 }
 
 interface CatalogObject {
+  name?: string
   type: string
   apogee_km: number | null
   perigee_km: number | null
@@ -104,6 +105,8 @@ async function main() {
   const colorList: number[] = []
   const altitudeList: number[] = []
   const kindList: number[] = []
+  const nameList: string[] = []
+  const typeList: string[] = []
   let latestEpoch = ''
   const counts: OrbitCounts = { satellite: 0, debris: 0, 'rocket body': 0, unknown: 0 }
 
@@ -123,6 +126,9 @@ async function main() {
     colorList.push(r, g, b)
     altitudeList.push(meanAltitude(obj))
     kindList.push(type === 'debris' ? 1 : 0)
+    const ommName = (obj.omm as { OBJECT_NAME?: string }).OBJECT_NAME
+    nameList.push((typeof obj.name === 'string' && obj.name) || ommName || 'UNKNOWN')
+    typeList.push(type)
     const epoch = obj.omm.EPOCH
     if (typeof epoch === 'string' && epoch > latestEpoch) latestEpoch = epoch
   }
@@ -142,6 +148,8 @@ async function main() {
       positions: firstFrame,
       altitudes,
       kinds,
+      names: nameList,
+      types: typeList,
       epoch: latestEpoch.slice(0, 10),
     },
     [colors.buffer, firstFrame.buffer, altitudes.buffer, kinds.buffer],

@@ -15,6 +15,8 @@ export type WorkerOut =
       positions: Float32Array
       altitudes: Float32Array
       kinds: Float32Array
+      names: string[]
+      types: string[]
       epoch: string
     }
   | { kind: 'positions'; positions: Float32Array }
