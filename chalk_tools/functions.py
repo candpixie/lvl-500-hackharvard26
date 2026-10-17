@@ -26,7 +26,7 @@ REMOTE_TOOLS_DIR = "/app/tools_data"
 IMAGE = (
     Image.debian_slim("3.12")
     .pip_install(["pandas", "numpy"])
-    .add_local_dir(str(LOCAL_TOOLS_DIR), REMOTE_TOOLS_DIR, strategy="copy")
+    .add_local_dir(str(LOCAL_TOOLS_DIR), REMOTE_TOOLS_DIR, strategy="volume")  # "copy" caps files at 32 KiB
 )
 
 
