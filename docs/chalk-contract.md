@@ -71,10 +71,22 @@ Demo questions:
 
 ## Local wiring
 
+The client waits **5 seconds** on `POST $CHALK_ASK_URL`, then uses local `place` / `rank` / SOCRATES. The bearer token is sent only to `https://` URLs, or to `http://` on localhost, `127.0.0.1`, or `::1`.
+
+No ask URL has been provided yet. Leave `CHALK_ASK_URL` empty until Person A sends one. Their Chalk environment id is `spcwce09a241` (an id, not a key). Put these in the gitignored `.env` on the API machine. Do not put them in `VITE_*`.
+
 ```
-# .env on the API box
-CHALK_ASK_URL=https://your-chalk-host/ask
+CHALK_ASK_URL=
 CHALK_TOKEN=
+CHALK_ENV_ID=spcwce09a241
 ```
 
-Then `GET http://127.0.0.1:8000/health` should show `"chalk": true`. `/ask` forces Grok to call `ask_chalk` first.
+`GET http://127.0.0.1:8000/health` probes that URL with GET (it does not send a question). Any response under 500 except 401, 403, and 404 counts as up, including 405 from a POST-only route. `"chalk": true` means the probe succeeded. If the URL is empty, the probe is skipped and `"chalk"` stays false.
+
+`/ask` is unchanged: `{question}` in, `{answer, focus, tool_calls, reasoner}` out. When `CHALK_ASK_URL` is set, Grok still calls `ask_chalk` first even if the last health probe failed.
+
+Their deployed functions return `{ok, data, coverage, caveats, snapshot_id}`, not the ask contract. That shape is only for the optional direct tools below. `recommend_orbit` is not deployed; `rank_shells` and `place_satellites` stay local.
+
+Optional, off unless set to `1`: `CHALK_REMOTE_FUNCTIONS`. Grok can then call `shell_crowding`, `objects_near`, and `close_approaches` with `RemoteFunction.from_name` (5s timeout). Requires `chalkcompute` installed and a Chalk login on the API machine. Do not import `chalk_tools.functions`; importing it deploys.
+
+Eval import, same loop as `/ask`, no session store: `from agent import run_agent` then `run_agent(question, history, context)`. It adds `ui_events` with `focusOrbit` when there is a focus.

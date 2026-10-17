@@ -7,6 +7,7 @@ import {
   LineBasicMaterial,
   Points,
   ShaderMaterial,
+  Vector3,
   type MeshPhongMaterial,
 } from 'three'
 import '@fontsource/ibm-plex-sans/400.css'
@@ -14,14 +15,40 @@ import '@fontsource/ibm-plex-sans/500.css'
 import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
 import AgentPanel from './AgentPanel.tsx'
-import type { FocusOrbit } from './events.ts'
+import type { FocusOrbit, Neighborhood } from './events.ts'
+import { imagineGrok, neighborhoodPrompt } from './events.ts'
 import { createFleet, type Fleet } from './fleet.ts'
+import NeighborhoodCard from './NeighborhoodCard.tsx'
 import ObjectCard from './ObjectCard.tsx'
 import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
-import { screenNearest } from './pick.ts'
 import PlacePanel from './PlacePanel.tsx'
 import { orbitLine, ORBIT_COLOR } from './place.ts'
+import {
+  exaggeratePoint,
+  neighborhoodAround,
+  neighborhoodInShell,
+  pickNearest,
+  screenNearest,
+} from './pick.ts'
 import { shellBounds, type ShellRow } from './shells.ts'
+import { createSimActors, simCameraRig } from './simCraft.ts'
+import SimOverlay from './SimOverlay.tsx'
+
+interface CatalogPick {
+  positions: Float32Array
+  names: string[]
+  types: string[]
+  altitudes: Float32Array
+}
+
+function catalogFrom(positions: Float32Array, facts: ObjectFact[], altitudes: Float32Array): CatalogPick {
+  return {
+    positions,
+    names: facts.map((fact) => fact.name),
+    types: facts.map((fact) => fact.type),
+    altitudes,
+  }
+}
 
 const LEGEND: { key: keyof OrbitCounts; label: string; color: string }[] = [
   { key: 'satellite', label: 'satellite', color: '#C9D6E3' },
@@ -33,6 +60,7 @@ const LEGEND: { key: keyof OrbitCounts; label: string; color: string }[] = [
 const ZOOM_HIDE_ALTITUDE = 1.15
 const START_ALTITUDE = 480
 const ALTITUDE_EXAGGERATION = 5.5
+const POINT_SIZE = 2.1
 
 type Status = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready' }
 
@@ -157,7 +185,7 @@ function pointMaterial(altitudeKm: number) {
     uniforms: {
       ...shellUniforms(altitudeKm),
       uExaggerate: { value: ALTITUDE_EXAGGERATION },
-      uSize: { value: 2.1 },
+      uSize: { value: POINT_SIZE },
       uScale: { value: 400 },
     },
     vertexShader: pointVertex,
@@ -185,8 +213,26 @@ export default function App() {
   const applyShellRef = useRef<(altitudeKm: number) => void>(() => {})
   const debrisRef = useRef<(on: boolean) => void>(() => {})
   const flyRef = useRef<(focus: FocusOrbit) => void>(() => {})
+  const catalogRef = useRef<CatalogPick | null>(null)
+  const vizGen = useRef(0)
+  const startVizRef = useRef<(hood: Neighborhood) => void>(() => {})
+  const enterSimRef = useRef<(index: number) => void>(() => {})
+  const exitSimRef = useRef<() => void>(() => {})
+  const simLiveRef = useRef(false)
   const [status, setStatus] = useState<Status>({ state: 'loading' })
+  const [viz, setViz] = useState<{
+    hood: Neighborhood
+    status: 'loading' | 'ready' | 'error'
+    image: { src: string; label: string } | null
+  } | null>(null)
+  const [sim, setSim] = useState<{
+    phase: 'still' | 'live'
+    hood: Neighborhood
+    image: { src: string; label: string } | null
+  } | null>(null)
   const [altitude, setAltitude] = useState(START_ALTITUDE)
+  const [inclination, setInclination] = useState(53)
+  const [count, setCount] = useState(1000)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
   const [shellError, setShellError] = useState<string | null>(null)
   const [debrisOnly, setDebrisOnly] = useState(false)
@@ -198,6 +244,67 @@ export default function App() {
   const altitudeRef = useRef(altitude)
   const debrisOnlyRef = useRef(debrisOnly)
   const clearPickRef = useRef<() => void>(() => {})
+
+  function startViz(hood: Neighborhood) {
+    const id = ++vizGen.current
+    setViz({ hood, status: 'loading', image: null })
+    void imagineGrok(neighborhoodPrompt(hood))
+      .then((art) => {
+        if (id !== vizGen.current) return
+        const src = art.url ?? (art.b64_json ? `data:image/png;base64,${art.b64_json}` : '')
+        setViz({ hood, status: src ? 'ready' : 'error', image: src ? { src, label: art.label } : null })
+      })
+      .catch(() => {
+        if (id !== vizGen.current) return
+        setViz({ hood, status: 'error', image: null })
+      })
+  }
+
+  function openSim() {
+    if (!viz) return
+    if (viz.image) {
+      setSim({ phase: 'still', hood: viz.hood, image: viz.image })
+      return
+    }
+    simLiveRef.current = true
+    setSim({ phase: 'live', hood: viz.hood, image: null })
+    enterSimRef.current(viz.hood.pickedIndex)
+  }
+
+  function startLiveSim() {
+    if (!sim) return
+    simLiveRef.current = true
+    setSim({ ...sim, phase: 'live' })
+    setAltitude(Math.round(sim.hood.picked.alt_km / 10) * 10)
+    enterSimRef.current(sim.hood.pickedIndex)
+  }
+
+  function leaveSim() {
+    simLiveRef.current = false
+    exitSimRef.current()
+    setSim(null)
+  }
+
+  useEffect(() => {
+    startVizRef.current = startViz
+  })
+
+  useEffect(() => {
+    document.body.classList.toggle('is-sim', Boolean(sim))
+    return () => document.body.classList.remove('is-sim')
+  }, [sim])
+
+  useEffect(() => {
+    if (sim?.phase !== 'live') return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      simLiveRef.current = false
+      exitSimRef.current()
+      setSim(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sim?.phase])
 
   useEffect(() => {
     const host = hostRef.current
@@ -264,7 +371,7 @@ export default function App() {
       const column = Math.min(320, width * 0.42)
       globe.width(width)
       globe.height(height)
-      globe.globeOffset([Math.round(column * 0.42), 0])
+      if (!simLiveRef.current) globe.globeOffset([Math.round(column * 0.42), 0])
       dots.uniforms.uScale.value = height * 0.5
     }
     fit()
@@ -280,6 +387,7 @@ export default function App() {
         material.uniforms.uShellMin.value = bounds.min
         material.uniforms.uShellMax.value = bounds.max
       }
+      if (simLiveRef.current) return
       const realRel = Math.min(Math.max(altitudeKm, 0) / 6371, 0.5)
       controls.minDistance = 100 * (1 + realRel * ALTITUDE_EXAGGERATION) + 22
     }
@@ -292,6 +400,7 @@ export default function App() {
     let orbit: Line | null = null
     const orbitMaterial = new LineBasicMaterial({ color: ORBIT_COLOR, transparent: true, opacity: 0.9 })
     flyRef.current = (focus) => {
+      if (simLiveRef.current) return
       const { positions } = orbitLine(focus.altitude_km, focus.inclination_deg, 28, ALTITUDE_EXAGGERATION)
       if (orbit) {
         globe.scene().remove(orbit)
@@ -327,6 +436,14 @@ export default function App() {
 
     let fleet: Fleet | null = null
     let cloud: Points | null = null
+    let simActors: ReturnType<typeof createSimActors> | null = null
+    let simIndex = -1
+    const simTarget = new Vector3()
+    const nativeUpdate = controls.update.bind(controls)
+    controls.update = () => {
+      if (simLiveRef.current) controls.target.copy(simTarget)
+      return nativeUpdate()
+    }
 
     const showModels = (on: boolean) => {
       if (cloud) cloud.visible = !on
@@ -335,7 +452,15 @@ export default function App() {
       if (on && positionsRef.current) fleet?.update(positionsRef.current)
     }
 
+    const hideForSim = () => {
+      if (cloud) cloud.visible = false
+      fleet?.setVisible(false)
+      for (const material of materials) material.uniforms.uHideOutside.value = 1
+      clearPick()
+    }
+
     globe.onZoom((pov: { altitude: number }) => {
+      if (simLiveRef.current) return
       const next = pov.altitude < ZOOM_HIDE_ALTITUDE
       if (next === zoomed) return
       zoomed = next
@@ -343,10 +468,11 @@ export default function App() {
       setClose(next)
       if (!next) clearPick()
     })
+
     const canvas = globe.renderer().domElement
     let pickFrame = 0
     const onPointerMove = (event: PointerEvent) => {
-      if (!zoomed) return
+      if (simLiveRef.current || !zoomed) return
       const rect = canvas.getBoundingClientRect()
       const x = event.clientX - rect.left
       const y = event.clientY - rect.top
@@ -389,6 +515,78 @@ export default function App() {
     }
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('pointerleave', onPointerLeave)
+
+    const lockSimTarget = (positions: Float32Array, index: number) => {
+      const [x, y, z] = exaggeratePoint(
+        positions[index * 3],
+        positions[index * 3 + 1],
+        positions[index * 3 + 2],
+        ALTITUDE_EXAGGERATION,
+      )
+      simTarget.set(x, y, z)
+    }
+
+    enterSimRef.current = (index: number) => {
+      const catalog = catalogRef.current
+      if (!catalog || index < 0) return
+      simActors?.dispose()
+      const spatial = neighborhoodAround(
+        index,
+        catalog.positions,
+        catalog.names,
+        catalog.types,
+        catalog.altitudes,
+        16,
+      )
+      simActors = createSimActors(
+        [index, ...spatial.nearbyIndices],
+        catalog.names,
+        catalog.types,
+        catalog.positions,
+        ALTITUDE_EXAGGERATION,
+      )
+      globe.scene().add(simActors.root)
+      simIndex = index
+      lockSimTarget(catalog.positions, index)
+      const { eye } = simCameraRig(simTarget.x, simTarget.y, simTarget.z)
+      globe.globeOffset([0, 0])
+      controls.minDistance = 12
+      controls.maxDistance = 80
+      controls.rotateSpeed = 0.85
+      controls.enablePan = true
+      dots.uniforms.uSize.value = 5
+      hideForSim()
+      const cam = globe.camera()
+      const start = cam.position.clone()
+      const startTarget = controls.target.clone()
+      const began = performance.now()
+      const step = () => {
+        const u = Math.min(1, (performance.now() - began) / 1200)
+        const ease = 1 - (1 - u) ** 3
+        cam.position.lerpVectors(start, eye, ease)
+        controls.target.lerpVectors(startTarget, simTarget, ease)
+        cam.lookAt(controls.target)
+        controls.update()
+        if (u < 1) requestAnimationFrame(step)
+      }
+      requestAnimationFrame(step)
+    }
+
+    exitSimRef.current = () => {
+      simActors?.dispose()
+      simActors = null
+      simIndex = -1
+      controls.maxDistance = 2200
+      controls.rotateSpeed = 0.45
+      controls.target.set(0, 0, 0)
+      dots.uniforms.uSize.value = POINT_SIZE
+      showModels(zoomed)
+      setClose(zoomed)
+      syncShell(altitudeRef.current)
+      fit()
+      globe.pointOfView({ lat: 18, lng: 12, altitude: 1.65 }, 900)
+    }
+
     const worker = new Worker(new URL('./propagate.worker.ts', import.meta.url), { type: 'module' })
 
     worker.onerror = () => {
@@ -418,6 +616,9 @@ export default function App() {
         fleet = createFleet(message.facts, message.altitudes, message.kinds, models, (mesh) => {
           globe.scene().add(mesh)
         })
+        const live = geometry.getAttribute('position').array as Float32Array
+        positionsRef.current = live
+        catalogRef.current = catalogFrom(live, message.facts, message.altitudes)
         setEpoch(message.epoch)
         setStatus({ state: 'ready' })
         return
@@ -428,7 +629,9 @@ export default function App() {
       array.set(message.positions)
       positions.needsUpdate = true
       positionsRef.current = array
-      if (zoomed) fleet.update(array)
+      if (zoomed && !simLiveRef.current) fleet.update(array)
+      simActors?.update(array)
+      if (simLiveRef.current && simIndex >= 0) lockSimTarget(array, simIndex)
       if (picked >= 0) {
         const length = Math.hypot(
           message.positions[picked * 3],
@@ -439,6 +642,33 @@ export default function App() {
       }
     }
 
+    let downX = 0
+    let downY = 0
+    const origin = new Vector3()
+    const dir = new Vector3()
+    const onDown = (event: PointerEvent) => {
+      downX = event.clientX
+      downY = event.clientY
+    }
+    const onUp = (event: PointerEvent) => {
+      if (simLiveRef.current) return
+      if (Math.hypot(event.clientX - downX, event.clientY - downY) > 5) return
+      const catalog = catalogRef.current
+      if (!catalog) return
+      const cam = globe.camera()
+      cam.updateMatrixWorld()
+      const rect = canvas.getBoundingClientRect()
+      const ndcX = ((event.clientX - rect.left) / rect.width) * 2 - 1
+      const ndcY = -((event.clientY - rect.top) / rect.height) * 2 + 1
+      origin.setFromMatrixPosition(cam.matrixWorld)
+      dir.set(ndcX, ndcY, 0.5).unproject(cam).sub(origin).normalize()
+      const index = pickNearest(catalog.positions, origin, dir, catalog.names.length, ALTITUDE_EXAGGERATION)
+      if (index < 0) return
+      startVizRef.current(neighborhoodAround(index, catalog.positions, catalog.names, catalog.types, catalog.altitudes))
+    }
+    canvas.addEventListener('pointerdown', onDown)
+    canvas.addEventListener('pointerup', onUp)
+
     return () => {
       applyShellRef.current = () => {}
       debrisRef.current = () => {}
@@ -446,9 +676,16 @@ export default function App() {
       cancelAnimationFrame(pickFrame)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerleave', onPointerLeave)
+      canvas.removeEventListener('pointerdown', onDown)
+      canvas.removeEventListener('pointerup', onUp)
       cancelAnimationFrame(refit)
       resizeObserver.disconnect()
       flyRef.current = () => {}
+      enterSimRef.current = () => {}
+      exitSimRef.current = () => {}
+      controls.update = nativeUpdate
+      simActors?.dispose()
+      catalogRef.current = null
       window.removeEventListener('resize', fit)
       window.visualViewport?.removeEventListener('resize', fit)
       worker.terminate()
@@ -509,16 +746,50 @@ export default function App() {
       <aside className="hud">
         <p className="kicker">Orbit Payback</p>
         <h1>How crowded is this altitude?</h1>
-        <p className="dek">{close ? 'Point at a satellite.' : 'That shell stays bright.'}</p>
+        <p className="dek">
+          {close
+            ? 'Point at a satellite. Click to visualize its neighborhood.'
+            : 'Place a constellation. Click a dot to visualize its neighborhood.'}
+        </p>
         {close && <p className="scale-note">Enlarged, not to scale</p>}
         <p className="asof">{epoch ? `Data as of ${formatEpoch(epoch)}` : 'CelesTrak GP'}</p>
         <PlacePanel
           altitude={altitude}
+          inclination={inclination}
+          count={count}
           shells={shells}
           shellError={shellError}
           debrisOnly={debrisOnly}
-          onAltitude={setAltitude}
+          onAltitude={(value) => {
+            setAltitude(value)
+            flyRef.current({ altitude_km: value, inclination_deg: inclination })
+          }}
+          onInclination={(value) => {
+            setInclination(value)
+            flyRef.current({ altitude_km: altitude, inclination_deg: value })
+          }}
+          onCount={setCount}
           onDebrisOnly={setDebrisOnly}
+          onScene={(scene) => {
+            setAltitude(scene.altitude)
+            if (scene.count != null) setCount(scene.count)
+            if (scene.debrisOnly != null) setDebrisOnly(scene.debrisOnly)
+            flyRef.current({ altitude_km: scene.altitude, inclination_deg: inclination })
+          }}
+          onVisualizeShell={() => {
+            const catalog = catalogRef.current
+            if (!catalog) return
+            const bounds = shellBounds(altitude)
+            const hood = neighborhoodInShell(
+              bounds.min,
+              bounds.max,
+              catalog.names,
+              catalog.types,
+              catalog.altitudes,
+              debrisOnly,
+            )
+            if (hood) startViz(hood)
+          }}
         />
         <ul className="legend">
           {LEGEND.map((item) => (
@@ -530,13 +801,36 @@ export default function App() {
         </ul>
         <p className="source">CelesTrak GP</p>
       </aside>
-      {close && fact && <ObjectCard fact={fact} liveKm={liveKm} />}
+      {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
       <AgentPanel
         onFocus={(focus) => {
-          setAltitude(Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10)))
-          flyRef.current(focus)
+          const next = Math.min(1950, Math.max(200, Math.round(focus.altitude_km / 10) * 10))
+          setAltitude(next)
+          setInclination(focus.inclination_deg)
+          flyRef.current({ ...focus, altitude_km: next })
         }}
       />
+      {viz && !sim && (
+        <NeighborhoodCard
+          hood={viz.hood}
+          status={viz.status}
+          image={viz.image}
+          onClose={() => {
+            vizGen.current += 1
+            setViz(null)
+          }}
+          onEnterSim={openSim}
+        />
+      )}
+      {sim && (
+        <SimOverlay
+          hood={sim.hood}
+          image={sim.image}
+          phase={sim.phase}
+          onEnterLive={startLiveSim}
+          onExit={leaveSim}
+        />
+      )}
       {overlay}
     </>
   )
