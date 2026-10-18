@@ -1122,7 +1122,7 @@ export default function App() {
           onPickRegion={setPickRegion}
           onScene={(scene) => {
             setAltitude(scene.altitude)
-            setAltitudeChosen(true)
+            setAltitudeChosen(scene.chosen ?? true)
             if (scene.inclination != null) setInclination(scene.inclination)
             if (scene.debrisOnly != null) setDebrisOnly(scene.debrisOnly)
             const look = scene.look || scene.latitude != null || scene.focus

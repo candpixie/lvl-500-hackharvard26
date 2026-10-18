@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import math
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
 
@@ -30,6 +31,19 @@ TYPE_NAMES = {"PAY": "payload", "DEB": "debris", "R/B": "rocket body", "UNK": "u
 # Same list as pipeline/build_objects.py; keep the two in sync.
 CONSTELLATION_PREFIXES = ("STARLINK", "ONEWEB", "KUIPER", "QIANFAN", "GUOWANG",
                           "IRIDIUM", "GLOBALSTAR", "FLOCK", "LEMUR")
+# What a user can say they are launching -> CelesTrak group files (or one NORAD id for the ISS).
+# Labels are CelesTrak's, not ours; see docs/object-kinds-findings.md for why "station" is the ISS alone.
+KINDS = {
+    "station": {"label": "space station", "norad": [25544]},
+    "starlink": {"label": "Starlink-style communications constellation", "group": "starlink"},
+    "oneweb": {"label": "OneWeb-style communications constellation", "group": "oneweb"},
+    "kuiper": {"label": "Kuiper-style communications constellation", "group": "kuiper"},
+    "earth_imaging": {"label": "Earth imaging (Planet)", "group": "planet"},
+    "weather": {"label": "weather satellite", "group": "weather"},
+    "cubesat": {"label": "cubesat", "group": "cubesat"},
+    "science": {"label": "science satellite", "group": "science"},
+    "military": {"label": "military satellite", "group": "military"},
+}
 # Pairs with almost no relative speed fly together (same launch, docked); not near misses.
 MIN_RELATIVE_SPEED_KM_S = 0.1
 # SOCRATES shows probability 1.0 on rows we cannot trust; flag, never hide or reinterpret.
@@ -42,6 +56,18 @@ def constellation(name: str) -> str | None:
         if upper.startswith(prefix):
             return prefix.lower()
     return None
+
+
+def load_kind_members(raw_dir: Path = RAW) -> dict:
+    """kind key -> NORAD ids, from the CelesTrak group files already downloaded."""
+    out: dict = {}
+    for key, spec in KINDS.items():
+        if "norad" in spec:
+            out[key] = list(spec["norad"])
+        else:
+            path = raw_dir / f"{spec['group']}.json"
+            out[key] = [int(o["NORAD_CAT_ID"]) for o in json.loads(path.read_text())] if path.exists() else []
+    return out
 
 
 def _file_hash(path: Path) -> str:
@@ -58,6 +84,7 @@ class Snapshot:
     catalog: pd.DataFrame
     socrates: pd.DataFrame
     snapshot_id: str
+    kind_members: dict = field(default_factory=dict)  # kind key -> list of NORAD ids
 
     @classmethod
     def load(cls, raw_dir: Path = RAW) -> "Snapshot":
@@ -69,14 +96,20 @@ class Snapshot:
         d["type"] = d.OBJECT_TYPE.where(d.OBJECT_TYPE.isin(TYPE_KEYS), "UNK")
         d["launch_year"] = pd.to_datetime(d.LAUNCH_DATE, errors="coerce").dt.year
         sid = hashlib.sha256((_file_hash(satcat) + _file_hash(socrates)).encode()).hexdigest()[:12]
-        return cls(catalog=d.reset_index(drop=True), socrates=pd.read_csv(socrates), snapshot_id=sid)
+        return cls(catalog=d.reset_index(drop=True), socrates=pd.read_csv(socrates), snapshot_id=sid,
+                   kind_members=load_kind_members(raw_dir))
 
     @classmethod
     def load_compact(cls, tools_dir: Path) -> "Snapshot":
         """Load the small files written by pipeline/build_tools_data.py (what ships to Chalk)."""
+        kinds_file = tools_dir / "kinds.csv.gz"
+        members: dict = {}
+        if kinds_file.exists():
+            for r in pd.read_csv(kinds_file).itertuples():
+                members.setdefault(r.kind, []).append(int(r.NORAD_CAT_ID))
         return cls(catalog=pd.read_csv(tools_dir / "catalog.csv.gz"),
                    socrates=pd.read_csv(tools_dir / "socrates.csv.gz"),
-                   snapshot_id=(tools_dir / "snapshot_id.txt").read_text().strip())
+                   snapshot_id=(tools_dir / "snapshot_id.txt").read_text().strip(), kind_members=members)
 
     @cached_property
     def approaches(self) -> pd.DataFrame:
@@ -335,4 +368,54 @@ def recommend_orbit(snap: Snapshot, inclination_deg: float, min_altitude_km: flo
                        "a satellite placed there would be pulled down too.")
     if any((c["debris_share"] or 0) >= 0.5 for c in ranked[:top_n]):
         caveats.append("Some quiet shells are mostly debris (see debris_share); few objects there does not mean a clean shell.")
+    return _ok(snap, data, _coverage(snap), caveats)
+
+
+def launch_kind_profile(snap: Snapshot, kind: str) -> dict:
+    """What existing objects of one kind look like: where they fly and how many close approaches they see.
+
+    The orbit numbers (altitude, inclination) are what real objects of that kind do today, so they work as a
+    starting point for a launch. The close-approach number is observed for those objects, one week of SOCRATES;
+    it is not a forecast for a new satellite and not a collision probability.
+    """
+    spec = KINDS.get(kind)
+    if spec is None:
+        return _fail(snap, "unknown_kind", f"kind must be one of: {', '.join(KINDS)}.")
+    ids = snap.kind_members.get(kind, [])
+    c = snap.catalog
+    m = c[c.NORAD_CAT_ID.isin(ids) & (c.mean_alt >= MIN_ALT_KM) & (c.mean_alt < MAX_ALT_KM)]
+    if m.empty:
+        return _fail(snap, "no_data", f"No low-orbit objects of kind '{kind}' in this snapshot.")
+    a = snap.approaches
+    events = pd.concat([a.NORAD_CAT_ID_1, a.NORAD_CAT_ID_2]).value_counts()
+    per_obj = m.NORAD_CAT_ID.map(events).fillna(0)
+    alt_med = float(m.mean_alt.median())
+    shell = shell_crowding(snap, alt_med)["data"]
+    data = {
+        "kind": kind, "label": spec["label"],
+        "objects": int(len(m)),
+        "altitude_km": {"p10": round(float(m.mean_alt.quantile(0.1))), "median": round(alt_med),
+                        "p90": round(float(m.mean_alt.quantile(0.9)))},
+        "inclination_deg_median": round(float(m.INCLINATION.median()), 1),
+        "close_approaches_per_object": round(float(per_obj.mean()), 1),
+        "share_with_at_least_one": round(float((per_obj > 0).mean()), 2),
+        "shell_at_median_altitude": {
+            "shell_km": shell["shell_km"], "objects_in_shell": shell["total"],
+            "debris_share": round(shell["counts"]["DEB"] / shell["total"], 2) if shell["total"] else None},
+        "all_leo_close_approaches_per_object": round(float(
+            c[(c.mean_alt >= MIN_ALT_KM) & (c.mean_alt < MAX_ALT_KM)].NORAD_CAT_ID.map(events).fillna(0).mean()), 1),
+    }
+    caveats = [
+        "Close approaches are SOCRATES predictions for one week, per existing object of this kind. They are not "
+        "collision probabilities and not a forecast for a new satellite.",
+        "SOCRATES only lists pairs that include an active satellite, and same-constellation pairs are removed here, "
+        "so constellations look quieter than other kinds partly by construction.",
+        "Near-polar orbits (about 97 degrees) cross many inclined constellations; that may explain high counts "
+        "for imaging, weather, cubesat and science kinds, but it was not tested.",
+        "Kind labels are CelesTrak's group files; tracked objects only.",
+    ]
+    if kind == "station":
+        caveats.append("Space station means the ISS alone (one object), so its numbers are an example, not a statistic.")
+    if len(m) < 30:
+        caveats.append(f"Only {len(m)} objects of this kind; treat the averages loosely.")
     return _ok(snap, data, _coverage(snap), caveats)
