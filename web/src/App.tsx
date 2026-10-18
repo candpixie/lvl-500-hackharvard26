@@ -7,7 +7,6 @@ import {
   Line,
   LineBasicMaterial,
   Points,
-  PointsMaterial,
   ShaderMaterial,
   Vector3,
   type MeshPhongMaterial,
@@ -23,7 +22,7 @@ import { imagineGrok, neighborhoodPrompt } from './events.ts'
 import { createFleet, type Fleet } from './fleet.ts'
 import NeighborhoodCard from './NeighborhoodCard.tsx'
 import ObjectCard from './ObjectCard.tsx'
-import { RING_DRAW_CAP, type ObjectFact, type OrbitCounts, type WorkerOut } from './orbit.ts'
+import type { ObjectFact, OrbitCounts, WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
 import {
   GLOBE_RADIUS,
@@ -585,25 +584,8 @@ export default function App() {
       return nativeUpdate()
     }
 
-    const ringPositions = new Float32Array(RING_DRAW_CAP * 3)
-    const ringGeometry = new BufferGeometry()
-    ringGeometry.setAttribute('position', new Float32BufferAttribute(ringPositions, 3))
-    ringGeometry.setDrawRange(0, 0)
-    const ringMaterial = new PointsMaterial({
-      color: '#67e8f9',
-      size: 4,
-      sizeAttenuation: false,
-      transparent: true,
-      opacity: 0.95,
-      depthWrite: false,
-    })
-    const ringCloud = new Points(ringGeometry, ringMaterial)
-    ringCloud.frustumCulled = false
-    globe.scene().add(ringCloud)
-
     const showModels = (on: boolean) => {
       if (cloud) cloud.visible = !on
-      ringCloud.visible = !on
       fleet?.setVisible(on)
       for (const material of materials) material.uniforms.uHideOutside.value = on ? 1 : 0
       if (on && positionsRef.current) fleet?.update(positionsRef.current)
@@ -611,7 +593,6 @@ export default function App() {
 
     const hideForSim = () => {
       if (cloud) cloud.visible = false
-      ringCloud.visible = false
       fleet?.setVisible(false)
       if (orbit) orbit.visible = false
       if (track) track.visible = false
@@ -863,13 +844,6 @@ export default function App() {
         return
       }
       if (message.kind !== 'positions') return
-      if (message.ring) {
-        const shown = Math.min(RING_DRAW_CAP, message.ring.length / 3)
-        const attr = ringCloud.geometry.getAttribute('position')
-        ;(attr.array as Float32Array).set(message.ring.subarray(0, shown * 3))
-        attr.needsUpdate = true
-        ringCloud.geometry.setDrawRange(0, shown)
-      }
       if (!cloud || !fleet || message.positions.length !== factsRef.current.length * 3) return
       const positions = cloud.geometry.getAttribute('position')
       const array = positions.array as Float32Array
@@ -975,9 +949,6 @@ export default function App() {
       controlsRef.current = null
       releaseSpinRef.current = () => {}
       worker.terminate()
-      ringGeometry.dispose()
-      ringMaterial.dispose()
-      ringCloud.removeFromParent()
       dots.dispose()
       models.dispose()
       orbitMaterial.dispose()
@@ -1190,15 +1161,6 @@ export default function App() {
               <span className="swatch" style={{ background: item.color }} />
             </li>
           ))}
-          <li>
-            <span>
-              your constellation
-              {count > RING_DRAW_CAP
-                ? ` showing ${RING_DRAW_CAP.toLocaleString('en-US')} of ${count.toLocaleString('en-US')}`
-                : ''}
-            </span>
-            <span className="swatch" style={{ background: '#67e8f9' }} />
-          </li>
         </ul>
         {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
       </div>
