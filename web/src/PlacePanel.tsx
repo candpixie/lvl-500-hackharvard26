@@ -10,7 +10,7 @@ import {
   type PlaceResult,
   type RankRow,
 } from './events.ts'
-import { bandNeighbors, presetOrbit, type BandGrid } from './launchKinds.ts'
+import { bandNeighbors, planKindChange, type BandGrid, type OrbitState } from './launchKinds.ts'
 import { majorityLabel, shellForAltitude, shellRange, shellTotal, type ShellRow } from './shells.ts'
 
 const PLACE_CHIPS = ['Africa', 'China', 'Europe']
@@ -110,6 +110,7 @@ interface PlacePanelProps {
     place?: string
     look?: boolean
     focus?: boolean
+    chosen?: boolean
   }) => void
   onVisualizeShell: () => void
   askedPlace?: string | null
@@ -162,6 +163,7 @@ export default function PlacePanel({
   const [touched, setTouched] = useState(false)
   const [kinds, setKinds] = useState<LaunchKind[]>([])
   const [grid, setGrid] = useState<BandGrid | null>(null)
+  const beforeKind = useRef<OrbitState | null>(null)
   const [kindKey, setKindKey] = useState('')
   const kind = kinds.find((row) => row.kind === kindKey) ?? null
   const neighbors = kind && grid ? bandNeighbors(grid, altitude, inclination) : null
@@ -227,10 +229,10 @@ export default function PlacePanel({
 
   function chooseKind(key: string) {
     setKindKey(key)
-    const row = kinds.find((item) => item.kind === key)
-    if (!row) return // Custom: leave the sliders where the user put them
-    const next = presetOrbit(row.altitude_km.median, row.inclination_deg_median)
-    onScene({ altitude: next.altitude, inclination: next.inclination })
+    const row = kinds.find((item) => item.kind === key) ?? null
+    const plan = planKindChange(beforeKind.current, { altitude, inclination, chosen: altitudeChosen }, row)
+    beforeKind.current = plan.saved
+    if (plan.scene) onScene({ ...plan.scene })
   }
 
   useEffect(() => {
