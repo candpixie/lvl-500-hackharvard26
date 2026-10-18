@@ -163,8 +163,219 @@
   outline-offset: 3px;
 }
 
+.research {
+  overflow: auto;
+  grid-template-rows: auto 1fr;
+}
+
+.research-sky {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.research-orbits {
+  position: fixed;
+  right: -22vw;
+  top: 8vh;
+  width: min(640px, 58vw);
+  height: min(640px, 58vw);
+  pointer-events: none;
+  z-index: 0;
+  perspective: 900px;
+}
+
+.research-orbits span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(231, 242, 122, 0.22);
+  border-radius: 50%;
+  transform: rotateX(72deg);
+}
+
+.research-orbits span:nth-child(2) {
+  inset: 11%;
+  border-color: rgba(201, 214, 227, 0.2);
+}
+
+.research-orbits span:nth-child(3) {
+  inset: 22%;
+  border-color: rgba(224, 164, 76, 0.28);
+}
+
+.research-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: -24px calc(clamp(20px, 5vw, 64px) * -1) 0;
+  padding: 24px clamp(20px, 5vw, 64px) 16px;
+  background: linear-gradient(to bottom, rgba(5, 7, 11, 0.92), rgba(5, 7, 11, 0));
+}
+
+.research-alt {
+  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: rgba(231, 242, 122, 0.85);
+}
+
+.research-body {
+  position: relative;
+  z-index: 1;
+  width: min(880px, 100%);
+  margin: 8px auto 64px;
+  padding-bottom: 48px;
+}
+
+.research-title {
+  margin: 0;
+  max-width: 12em;
+  font-family: 'Jost Variable', ui-sans-serif, sans-serif;
+  font-size: clamp(40px, 6vw, 72px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 0.98;
+  color: #e8eef5;
+}
+
+.research-lede,
+.research-copy,
+.research-mission p,
+.research-grid p,
+.research-points {
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgba(201, 214, 227, 0.82);
+}
+
+.research-lede {
+  margin: 20px 0 0;
+  max-width: 38em;
+}
+
+.research-label {
+  margin: 0 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #e7f27a;
+}
+
+.research-mission,
+.research-body > section {
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 1px solid rgba(201, 214, 227, 0.16);
+}
+
+.research-mission {
+  padding: 22px 22px 20px;
+  border: 1px solid rgba(231, 242, 122, 0.28);
+  border-top: 1px solid rgba(231, 242, 122, 0.28);
+  background:
+    linear-gradient(135deg, rgba(231, 242, 122, 0.08), rgba(8, 12, 18, 0.2) 42%),
+    rgba(8, 12, 18, 0.55);
+}
+
+.research-mission p,
+.research-copy {
+  margin: 0;
+  max-width: 40em;
+}
+
+.research-body h2 {
+  margin: 0 0 14px;
+  max-width: 16em;
+  font-family: 'Jost Variable', ui-sans-serif, sans-serif;
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #e8eef5;
+}
+
+.research-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.research-grid article {
+  margin: 0;
+  padding: 16px 16px 8px;
+  border: 1px solid rgba(201, 214, 227, 0.16);
+  background: rgba(8, 12, 18, 0.62);
+  backdrop-filter: blur(6px);
+}
+
+.research-index {
+  display: block;
+  margin-bottom: 18px;
+  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: #e7f27a;
+}
+
+.research-grid h3 {
+  margin: 0 0 8px;
+  font-family: 'Jost Variable', ui-sans-serif, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: #e8eef5;
+}
+
+.research-grid p {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.research-points {
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 14px;
+  max-width: 40em;
+}
+
+.research-points li {
+  padding-left: 14px;
+  border-left: 2px solid rgba(231, 242, 122, 0.7);
+}
+
+.research-points strong {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+  color: #e8eef5;
+}
+
+.research-actions {
+  margin-top: 40px;
+}
+
+@media (max-width: 800px) {
+  .research-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .research-orbits {
+    opacity: 0.45;
+    right: -40vw;
+  }
+}
+
 @media (max-width: 640px) {
   .home-link {
     display: none;
+  }
+
+  .research .home-link {
+    display: inline;
   }
 }
