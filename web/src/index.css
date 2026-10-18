@@ -818,11 +818,14 @@ input.place-input {
 
 .inspect dt {
   font-size: 12px;
-  color: rgba(201, 214, 227, 0.48);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: #e7f27a;
 }
 
 .inspect dd {
   font-size: 13px;
+  color: #f4f7fb;
 }
 
 .inspect .source {

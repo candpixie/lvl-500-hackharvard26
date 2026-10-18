@@ -26,15 +26,36 @@ function paint(color: string) {
 }
 
 function satelliteMesh() {
-  const mat = paint('#d7e2ee')
-  const panel = paint('#4d7ecc')
+  const body = paint('#e4eaf1')
+  const gold = paint('#c29e57')
+  const frame = paint('#2a3342')
+  const cellA = paint('#3366c4')
+  const cellB = paint('#6ba3e8')
+  const metal = paint('#c5ced6')
   const group = new Group()
-  const bus = new Mesh(new BoxGeometry(0.55, 0.36, 0.4), mat)
-  const left = new Mesh(new BoxGeometry(0.95, 0.08, 0.52), panel)
-  left.position.x = -0.78
-  const right = new Mesh(new BoxGeometry(0.95, 0.08, 0.52), panel)
-  right.position.x = 0.78
-  group.add(bus, left, right)
+  const bus = new Mesh(new BoxGeometry(0.42, 0.28, 0.32), body)
+  const foil = new Mesh(new BoxGeometry(0.36, 0.06, 0.34), gold)
+  foil.position.y = 0.1
+  group.add(bus, foil)
+  for (const side of [-1, 1]) {
+    const yoke = new Mesh(new BoxGeometry(0.16, 0.06, 0.08), frame)
+    yoke.position.x = side * 0.29
+    const wing = new Mesh(new BoxGeometry(1.12, 0.028, 0.56), frame)
+    wing.position.x = side * 0.98
+    group.add(yoke, wing)
+    for (let cell = 0; cell < 4; cell++) {
+      const tile = new Mesh(new BoxGeometry(0.18, 0.016, 0.44), cell % 2 === 0 ? cellA : cellB)
+      tile.position.set(side * (0.62 + cell * 0.24), 0.02, 0)
+      group.add(tile)
+    }
+  }
+  const dish = new Mesh(new CylinderGeometry(0.02, 0.16, 0.045, 12), metal)
+  dish.position.y = 0.22
+  const feed = new Mesh(new CylinderGeometry(0.012, 0.012, 0.1, 6), metal)
+  feed.position.y = 0.29
+  const boom = new Mesh(new CylinderGeometry(0.018, 0.018, 0.2, 6), metal)
+  boom.position.set(0, 0.14, 0.2)
+  group.add(dish, feed, boom)
   return group
 }
 

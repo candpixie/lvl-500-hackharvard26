@@ -44,6 +44,8 @@ function serveObjects(): Plugin {
   }
 }
 
+const apiOrigin = `http://127.0.0.1:${process.env.API_PORT || '8000'}`
+
 export default defineConfig({
   plugins: [react(), serveObjects()],
   worker: { format: 'es' },
@@ -52,16 +54,16 @@ export default defineConfig({
       allow: [fileURLToPath(new URL('.', import.meta.url)), fileURLToPath(new URL('..', import.meta.url))],
     },
     proxy: {
-      '/ask': 'http://127.0.0.1:8000',
-      '/speak': 'http://127.0.0.1:8000',
-      '/place': 'http://127.0.0.1:8000',
-      '/locations': 'http://127.0.0.1:8000',
-      '/rank': 'http://127.0.0.1:8000',
-      '/shells': 'http://127.0.0.1:8000',
-      '/close_approaches': 'http://127.0.0.1:8000',
-      '/health': 'http://127.0.0.1:8000',
-      '/listen': 'http://127.0.0.1:8000',
-      '/imagine': 'http://127.0.0.1:8000',
+      '/ask': apiOrigin,
+      '/speak': apiOrigin,
+      '/place': apiOrigin,
+      '/locations': apiOrigin,
+      '/rank': apiOrigin,
+      '/shells': apiOrigin,
+      '/close_approaches': apiOrigin,
+      '/health': apiOrigin,
+      '/listen': apiOrigin,
+      '/imagine': apiOrigin,
     },
   },
 })

@@ -53,22 +53,49 @@ function paint(geometry: BufferGeometry, rgb: readonly [number, number, number])
   return geometry
 }
 
+function place(geometry: BufferGeometry, x: number, y: number, z: number) {
+  geometry.translate(x, y, z)
+  return geometry
+}
+
 function satelliteGeometry() {
-  const bus = paint(new BoxGeometry(0.5, 0.34, 0.36), [0.93, 0.95, 0.98])
-  const panel = new BoxGeometry(0.98, 0.1, 0.56)
-  paint(panel, [0.35, 0.58, 0.92])
-  const left = panel.clone()
-  left.translate(-0.76, 0, 0)
-  const right = panel.clone()
-  right.translate(0.76, 0, 0)
-  const dish = paint(new CylinderGeometry(0.04, 0.13, 0.07, 8), [0.62, 0.66, 0.7])
-  dish.translate(0, 0.2, 0)
-  const merged = mergeGeometries([bus, left, right, dish])
-  bus.dispose()
-  panel.dispose()
-  left.dispose()
-  right.dispose()
-  dish.dispose()
+  const body: readonly [number, number, number] = [0.9, 0.92, 0.95]
+  const gold: readonly [number, number, number] = [0.76, 0.62, 0.34]
+  const frame: readonly [number, number, number] = [0.14, 0.18, 0.26]
+  const cellA: readonly [number, number, number] = [0.2, 0.38, 0.74]
+  const cellB: readonly [number, number, number] = [0.42, 0.64, 0.9]
+  const metal: readonly [number, number, number] = [0.78, 0.82, 0.86]
+  const parts: BufferGeometry[] = []
+  const add = (
+    geometry: BufferGeometry,
+    rgb: readonly [number, number, number],
+    x = 0,
+    y = 0,
+    z = 0,
+  ) => {
+    parts.push(paint(place(geometry, x, y, z), rgb))
+  }
+
+  add(new BoxGeometry(0.42, 0.28, 0.32), body)
+  add(new BoxGeometry(0.36, 0.06, 0.34), gold, 0, 0.1, 0)
+  add(new BoxGeometry(0.16, 0.06, 0.08), frame, 0.29, 0, 0)
+  add(new BoxGeometry(0.16, 0.06, 0.08), frame, -0.29, 0, 0)
+
+  for (const side of [-1, 1]) {
+    const wing = side * 0.98
+    add(new BoxGeometry(1.12, 0.028, 0.56), frame, wing, 0, 0)
+    for (let cell = 0; cell < 4; cell++) {
+      const x = side * (0.62 + cell * 0.24)
+      add(new BoxGeometry(0.18, 0.016, 0.44), cell % 2 === 0 ? cellA : cellB, x, 0.02, 0)
+    }
+  }
+
+  add(new CylinderGeometry(0.02, 0.16, 0.045, 12), metal, 0, 0.22, 0)
+  add(new CylinderGeometry(0.012, 0.012, 0.1, 6), metal, 0, 0.29, 0)
+  add(new CylinderGeometry(0.018, 0.018, 0.2, 6), metal, 0, 0.14, 0.2)
+
+  const merged = mergeGeometries(parts)
+  for (const part of parts) part.dispose()
   if (!merged) throw new Error('Could not build the satellite model')
   return merged
 }
