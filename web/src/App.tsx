@@ -7,6 +7,7 @@ import {
   Line,
   LineBasicMaterial,
   Points,
+  PointsMaterial,
   ShaderMaterial,
   Vector3,
   type MeshPhongMaterial,
@@ -22,7 +23,7 @@ import { imagineGrok, neighborhoodPrompt } from './events.ts'
 import { createFleet, type Fleet } from './fleet.ts'
 import NeighborhoodCard from './NeighborhoodCard.tsx'
 import ObjectCard from './ObjectCard.tsx'
-import { type ObjectFact, type OrbitCounts, type WorkerOut } from './orbit.ts'
+import { RING_DRAW_CAP, type ObjectFact, type OrbitCounts, type WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
 import {
   GLOBE_RADIUS,
@@ -35,7 +36,6 @@ import {
 import {
   exaggeratePoint,
   neighborhoodAround,
-  neighborhoodInShell,
   screenNearest,
 } from './pick.ts'
 import { shellBounds, type ShellRow } from './shells.ts'
@@ -253,7 +253,9 @@ export default function App() {
   const [altitudeChosen, setAltitudeChosen] = useState(false)
   const [inclination, setInclination] = useState(DEFAULT_INCLINATION)
   const [selectedNorad, setSelectedNorad] = useState<number | null>(null)
-  const [count] = useState(1)
+  const [count, setCount] = useState(1)
+  const countRef = useRef(count)
+  countRef.current = count
   const [size, setSize] = useState(4)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
   const [shellError, setShellError] = useState<string | null>(null)
@@ -583,8 +585,25 @@ export default function App() {
       return nativeUpdate()
     }
 
+    const ringPositions = new Float32Array(RING_DRAW_CAP * 3)
+    const ringGeometry = new BufferGeometry()
+    ringGeometry.setAttribute('position', new Float32BufferAttribute(ringPositions, 3))
+    ringGeometry.setDrawRange(0, 0)
+    const ringMaterial = new PointsMaterial({
+      color: '#67e8f9',
+      size: 4,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    })
+    const ringCloud = new Points(ringGeometry, ringMaterial)
+    ringCloud.frustumCulled = false
+    globe.scene().add(ringCloud)
+
     const showModels = (on: boolean) => {
       if (cloud) cloud.visible = !on
+      ringCloud.visible = !on
       fleet?.setVisible(on)
       for (const material of materials) material.uniforms.uHideOutside.value = on ? 1 : 0
       if (on && positionsRef.current) fleet?.update(positionsRef.current)
@@ -592,6 +611,7 @@ export default function App() {
 
     const hideForSim = () => {
       if (cloud) cloud.visible = false
+      ringCloud.visible = false
       fleet?.setVisible(false)
       if (orbit) orbit.visible = false
       if (track) track.visible = false
@@ -801,6 +821,12 @@ export default function App() {
 
     const worker = new Worker(new URL('./propagate.worker.ts', import.meta.url), { type: 'module' })
     workerRef.current = worker
+    worker.postMessage({
+      kind: 'ring',
+      altKm: altitudeRef.current,
+      incDeg: inclinationRef.current,
+      count: countRef.current,
+    })
 
     worker.onerror = () => {
       setStatus({ state: 'error', message: 'Orbit worker failed' })
@@ -837,6 +863,13 @@ export default function App() {
         return
       }
       if (message.kind !== 'positions') return
+      if (message.ring) {
+        const shown = Math.min(RING_DRAW_CAP, message.ring.length / 3)
+        const attr = ringCloud.geometry.getAttribute('position')
+        ;(attr.array as Float32Array).set(message.ring.subarray(0, shown * 3))
+        attr.needsUpdate = true
+        ringCloud.geometry.setDrawRange(0, shown)
+      }
       if (!cloud || !fleet || message.positions.length !== factsRef.current.length * 3) return
       const positions = cloud.geometry.getAttribute('position')
       const array = positions.array as Float32Array
@@ -942,6 +975,9 @@ export default function App() {
       controlsRef.current = null
       releaseSpinRef.current = () => {}
       worker.terminate()
+      ringGeometry.dispose()
+      ringMaterial.dispose()
+      ringCloud.removeFromParent()
       dots.dispose()
       models.dispose()
       orbitMaterial.dispose()
@@ -1064,6 +1100,9 @@ export default function App() {
       if (typeof length === 'number' && Number.isFinite(length)) {
         setSize(Math.min(20, Math.max(1, length)))
       }
+      if (typeof focus.count === 'number' && Number.isFinite(focus.count) && focus.count >= 1) {
+        setCount(Math.round(focus.count))
+      }
       if (focus.place) setAskedPlace(focus.place)
       flyRef.current({ ...focus, altitude_km: next }, { pin: true, look: true })
     }
@@ -1124,6 +1163,7 @@ export default function App() {
             setAltitude(scene.altitude)
             setAltitudeChosen(scene.chosen ?? true)
             if (scene.inclination != null) setInclination(scene.inclination)
+            if (scene.count != null) setCount(scene.count)
             if (scene.debrisOnly != null) setDebrisOnly(scene.debrisOnly)
             const look = scene.look || scene.latitude != null || scene.focus
             flyRef.current(
@@ -1139,20 +1179,6 @@ export default function App() {
             )
           }}
           askedPlace={askedPlace}
-          onVisualizeShell={() => {
-            const catalog = catalogRef.current
-            if (!catalog) return
-            const bounds = shellBounds(altitude)
-            const hood = neighborhoodInShell(
-              bounds.min,
-              bounds.max,
-              catalog.names,
-              catalog.types,
-              catalog.altitudes,
-              debrisOnly,
-            )
-            if (hood) startViz(hood)
-          }}
         />
         <p className="source">Tracked objects only, lower bound</p>
       </aside>
@@ -1164,6 +1190,15 @@ export default function App() {
               <span className="swatch" style={{ background: item.color }} />
             </li>
           ))}
+          <li>
+            <span>
+              your constellation
+              {count > RING_DRAW_CAP
+                ? ` showing ${RING_DRAW_CAP.toLocaleString('en-US')} of ${count.toLocaleString('en-US')}`
+                : ''}
+            </span>
+            <span className="swatch" style={{ background: '#67e8f9' }} />
+          </li>
         </ul>
         {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
       </div>

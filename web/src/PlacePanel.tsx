@@ -18,6 +18,7 @@ function formatCount(value: number) {
 }
 
 function formatCollisionCount(value: number) {
+  if (value > 0 && value < 0.01) return value.toPrecision(2)
   return value < 1 ? value.toFixed(2) : Math.round(value).toLocaleString('en-US')
 }
 
@@ -103,7 +104,6 @@ interface PlacePanelProps {
     focus?: boolean
     chosen?: boolean
   }) => void
-  onVisualizeShell: () => void
   askedPlace?: string | null
   pickRegion: boolean
   pickedLat: number | null
@@ -124,7 +124,6 @@ export default function PlacePanel({
   onSize,
   onDebrisOnly,
   onScene,
-  onVisualizeShell,
   askedPlace,
   pickRegion,
   pickedLat,
@@ -155,7 +154,7 @@ export default function PlacePanel({
   const neighbors = kind && grid ? bandNeighbors(grid, altitude, inclination) : null
   const dims = dimsFor(size)
   const ready = altitudeChosen || touched
-  const tone = ready && place ? scoreTone(place.score) : null
+  const tone = place ? scoreTone(place.score) : null
   const shellLabel = current
     ? `${current.shell_km.toLocaleString('en-US')}–${(current.shell_km + 50).toLocaleString('en-US')} km`
     : null
@@ -528,18 +527,6 @@ export default function PlacePanel({
           </p>
         )}
 
-        <details className="fold">
-          <summary>Examples</summary>
-          <div className="presets beat-presets">
-            <button type="button" onClick={() => onScene({ altitude: 525, debrisOnly: false })}>
-              Quiet 500 km
-            </button>
-            <button type="button" onClick={() => onScene({ altitude: 825, debrisOnly: true })}>
-              Debris at 800 km
-            </button>
-          </div>
-        </details>
-
         <button
           className="debris-toggle"
           type="button"
@@ -556,7 +543,7 @@ export default function PlacePanel({
           Impact
         </h2>
         <div className="impact-score">
-          {ready && place ? (
+          {place ? (
             <>
               <button
                 type="button"
@@ -577,6 +564,10 @@ export default function PlacePanel({
                     : tone}
                 </span>
               </button>
+              <p className="shell-line">
+                <span className="num">{formatCollisionCount(place.collisions_per_year)}</span> collisions/yr
+                (first-order, whole shell) · wreckage {yearsLabel(place.dead_sat_lifetime_years)}
+              </p>
               {place.band_inc_lo != null && (
                 <p className="shell-line">
                   This {formatBand(place.band_inc_lo)}–{formatBand(place.band_inc_hi ?? place.band_inc_lo)}° band
@@ -716,11 +707,6 @@ export default function PlacePanel({
           )}
         </details>
       )}
-
-      <button type="button" className="quieter" onClick={onVisualizeShell}>
-        <strong>Visualize this shell</strong>
-        Illustration of nearby objects
-      </button>
     </div>
   )
 }
