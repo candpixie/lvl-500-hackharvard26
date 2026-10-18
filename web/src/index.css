@@ -1203,3 +1203,12 @@ body.is-sim .inspect::before {
     top: 14px;
   }
 }
+
+.kind-select {
+  width: 100%;
+}
+
+.kind-line {
+  font-size: 0.8rem;
+  line-height: 1.4;
+}

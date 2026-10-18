@@ -254,3 +254,51 @@ def test_recommend_orbit_validation_and_caveats(snap):
     low = core.recommend_orbit(snap, 53, 200, 600, top_n=10)
     assert any("drag" in c for c in low["caveats"])  # low shells look quiet partly because of drag
     assert all("safe" not in c.lower().replace("not a guarantee of safety", "") for c in low["caveats"])
+
+
+# ---------- launch_kind_profile ----------
+
+@pytest.mark.parametrize("kind", ["starlink", "earth_imaging", "cubesat", "military"])
+def test_launch_kind_profile_matches_independent_recompute(snap, kind):
+    spec = core.KINDS[kind]
+    members = {int(o["NORAD_CAT_ID"]) for o in json.loads((RAW / f"{spec['group']}.json").read_text())}
+    alts = {}
+    with (RAW / "satcat.csv").open() as f:
+        for r in csv.DictReader(f):
+            if (not r["DECAY_DATE"] and r["ORBIT_CENTER"] == "EA" and r["APOGEE"] and r["PERIGEE"]
+                    and int(r["NORAD_CAT_ID"]) in members):
+                alt = (float(r["APOGEE"]) + float(r["PERIGEE"])) / 2
+                if core.MIN_ALT_KM <= alt < core.MAX_ALT_KM:
+                    alts[int(r["NORAD_CAT_ID"])] = alt
+    hits = {n: 0 for n in alts}
+    for row in snap.approaches.itertuples():
+        for n in (row.NORAD_CAT_ID_1, row.NORAD_CAT_ID_2):
+            if n in hits:
+                hits[n] += 1
+    res = core.launch_kind_profile(snap, kind)
+    assert res["ok"]
+    assert res["data"]["objects"] == len(alts)
+    assert res["data"]["close_approaches_per_object"] == round(sum(hits.values()) / len(alts), 1)
+
+
+def test_launch_kind_profile_unknown_kind_is_rejected(snap):
+    res = core.launch_kind_profile(snap, "death star")
+    assert not res["ok"] and res["error"]["type"] == "unknown_kind"
+
+
+def test_launch_kind_profile_says_it_is_not_a_probability(snap):
+    res = core.launch_kind_profile(snap, "weather")
+    text = " ".join(res["caveats"]).lower()
+    assert "not collision probabilities" in text and "safe" not in text
+
+
+def test_launch_kind_profile_station_is_flagged_as_one_object(snap):
+    res = core.launch_kind_profile(snap, "station")
+    assert res["data"]["objects"] == 1
+    assert any("ISS alone" in c for c in res["caveats"])
+
+
+def test_compact_snapshot_keeps_kinds(snap, tmp_path):
+    out = core.ROOT / "data/out/tools"
+    compact = core.Snapshot.load_compact(out)
+    assert core.launch_kind_profile(compact, "cubesat")["data"] == core.launch_kind_profile(snap, "cubesat")["data"]
