@@ -253,7 +253,7 @@ export default function App() {
   const [altitudeChosen, setAltitudeChosen] = useState(false)
   const [inclination, setInclination] = useState(DEFAULT_INCLINATION)
   const [selectedNorad, setSelectedNorad] = useState<number | null>(null)
-  const [count, setCount] = useState(1000)
+  const [count] = useState(1)
   const [size, setSize] = useState(4)
   const [shells, setShells] = useState<ShellRow[] | null>(null)
   const [shellError, setShellError] = useState<string | null>(null)
@@ -261,13 +261,9 @@ export default function App() {
   const [askedPlace, setAskedPlace] = useState<string | null>(null)
   const [pickRegion, setPickRegion] = useState(false)
   const [pickedLat, setPickedLat] = useState<number | null>(null)
-  const [clockRate, setClockRate] = useState<1 | 60 | 600>(1)
-  const [simLabel, setSimLabel] = useState('')
   const workerRef = useRef<Worker | null>(null)
-  const fastRef = useRef(false)
   const controlsRef = useRef<{ autoRotate: boolean } | null>(null)
   const releaseSpinRef = useRef<() => void>(() => {})
-  fastRef.current = clockRate > 1
   const [epoch, setEpoch] = useState('')
   const [close, setClose] = useState(false)
   const [fact, setFact] = useState<ObjectFact | null>(null)
@@ -304,7 +300,6 @@ export default function App() {
       return
     }
     simLiveRef.current = true
-    setClockRate(1)
     setSim({ phase: 'live', hood: viz.hood, image: null })
     enterSimRef.current(viz.hood.pickedIndex)
   }
@@ -312,7 +307,6 @@ export default function App() {
   function startLiveSim() {
     if (!sim) return
     simLiveRef.current = true
-    setClockRate(1)
     setSim({ ...sim, phase: 'live' })
     setAltitude(Math.round(sim.hood.picked.alt_km / 10) * 10)
     enterSimRef.current(sim.hood.pickedIndex)
@@ -404,15 +398,13 @@ export default function App() {
     const HOME = { lat: 18, lng: 12, altitude: 2.6 }
     const INTRO_MS = 2500
     const FLY_MS = 1400
-    const IDLE_MS = 4_000
     const globeCenter = new Vector3()
     let userPaused = false
     let inSimView = false
     let spinHeldUntil = 0
-    let idleTimer = 0
     let releaseTimer = 0
     const canSpin = () =>
-      !fastRef.current && !userPaused && !inSimView && !simLiveRef.current && performance.now() >= spinHeldUntil
+      !userPaused && !inSimView && !simLiveRef.current && performance.now() >= spinHeldUntil
     const releaseSpin = () => {
       if (canSpin()) controls.autoRotate = true
     }
@@ -426,16 +418,10 @@ export default function App() {
     const holdForPointer = () => {
       userPaused = true
       controls.autoRotate = false
-      window.clearTimeout(idleTimer)
-      idleTimer = 0
     }
-    const armResume = () => {
-      window.clearTimeout(idleTimer)
-      idleTimer = window.setTimeout(() => {
-        idleTimer = 0
-        userPaused = false
-        releaseSpin()
-      }, IDLE_MS)
+    const resumeForPointer = () => {
+      userPaused = false
+      releaseSpin()
     }
     requestAnimationFrame(() => {
       globe.pointOfView(HOME, INTRO_MS)
@@ -676,16 +662,11 @@ export default function App() {
         holdForPointer()
         return
       }
-      if (userPaused && idleTimer === 0) armResume()
+      if (userPaused) resumeForPointer()
     }
     const onWheel = (event: WheelEvent) => {
-      if (pointerOverGlobe(event)) {
-        holdForPointer()
-        return
-      }
-      userPaused = true
-      controls.autoRotate = false
-      armResume()
+      if (pointerOverGlobe(event)) holdForPointer()
+      else if (userPaused) resumeForPointer()
     }
     let pickFrame = 0
     const onPointerMove = (event: PointerEvent) => {
@@ -733,7 +714,7 @@ export default function App() {
       cancelAnimationFrame(pickFrame)
       if (picked >= 0) clearPick()
       if (event.buttons !== 0) return
-      if (userPaused && idleTimer === 0) armResume()
+      if (userPaused) resumeForPointer()
     }
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('pointerleave', onPointerLeave)
@@ -820,7 +801,6 @@ export default function App() {
 
     const worker = new Worker(new URL('./propagate.worker.ts', import.meta.url), { type: 'module' })
     workerRef.current = worker
-    let clockLabel = ''
 
     worker.onerror = () => {
       setStatus({ state: 'error', message: 'Orbit worker failed' })
@@ -858,11 +838,6 @@ export default function App() {
       }
       if (message.kind !== 'positions') return
       if (!cloud || !fleet || message.positions.length !== factsRef.current.length * 3) return
-      const label = new Date(message.simMs).toISOString().slice(0, 16).replace('T', ' ')
-      if (label !== clockLabel) {
-        clockLabel = label
-        setSimLabel(`${label} UTC`)
-      }
       const positions = cloud.geometry.getAttribute('position')
       const array = positions.array as Float32Array
       array.set(message.positions)
@@ -899,7 +874,7 @@ export default function App() {
       downY = event.clientY
     }
     const onUp = (event: PointerEvent) => {
-      if (!pointerOverGlobe(event) && userPaused && idleTimer === 0) armResume()
+      if (!pointerOverGlobe(event) && userPaused) resumeForPointer()
       if (simLiveRef.current) return
       if (Math.hypot(event.clientX - downX, event.clientY - downY) > 5) return
       if (pickRegionRef.current) {
@@ -945,7 +920,6 @@ export default function App() {
       clearPickRef.current = () => {}
       selectByNoradRef.current = () => false
       cancelAnimationFrame(pickFrame)
-      window.clearTimeout(idleTimer)
       window.clearTimeout(releaseTimer)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerleave', onPointerLeave)
@@ -987,15 +961,9 @@ export default function App() {
   useEffect(() => {
     const worker = workerRef.current
     if (!worker) return
-    worker.postMessage({ kind: 'rate', rate: clockRate })
     worker.postMessage({ kind: 'ring', altKm: altitude, incDeg: inclination, count })
-    const controls = controlsRef.current
-    if (clockRate > 1) {
-      if (controls) controls.autoRotate = false
-    } else {
-      releaseSpinRef.current()
-    }
-  }, [clockRate, altitude, inclination, count])
+    releaseSpinRef.current()
+  }, [altitude, inclination, count])
 
   const applyUiEvent = (event: UiEvent) => {
     if (event.type === 'focusOrbit') {
@@ -1092,9 +1060,6 @@ export default function App() {
       setAltitude(next)
       setAltitudeChosen(true)
       setInclination(focus.inclination_deg)
-      if (typeof focus.count === 'number' && Number.isFinite(focus.count) && focus.count > 0) {
-        setCount(Math.round(focus.count))
-      }
       const length = focus.dims_m?.[0]
       if (typeof length === 'number' && Number.isFinite(length)) {
         setSize(Math.min(20, Math.max(1, length)))
@@ -1119,13 +1084,9 @@ export default function App() {
       <aside className="hud">
         <p className="kicker">LVL 500</p>
         <h1>How crowded is this altitude?</h1>
-        <p className="dek">
-          {pickRegion
-            ? 'Click a point on Earth.'
-            : close
-              ? 'Point at a satellite. Not to scale.'
-              : 'Set a shell, or click a dot.'}
-        </p>
+        {(pickRegion || close) && (
+          <p className="dek">{pickRegion ? 'Click a point on Earth.' : 'Point at a satellite. Not to scale.'}</p>
+        )}
         <p className="asof">
           {epoch ? (
             <>
@@ -1154,7 +1115,6 @@ export default function App() {
             setInclination(value)
             flyRef.current({ altitude_km: altitude, inclination_deg: value })
           }}
-          onCount={setCount}
           onSize={setSize}
           onDebrisOnly={setDebrisOnly}
           pickRegion={pickRegion}
@@ -1164,7 +1124,6 @@ export default function App() {
             setAltitude(scene.altitude)
             setAltitudeChosen(scene.chosen ?? true)
             if (scene.inclination != null) setInclination(scene.inclination)
-            if (scene.count != null) setCount(scene.count)
             if (scene.debrisOnly != null) setDebrisOnly(scene.debrisOnly)
             const look = scene.look || scene.latitude != null || scene.focus
             flyRef.current(
@@ -1195,25 +1154,6 @@ export default function App() {
             if (hood) startViz(hood)
           }}
         />
-        <div className="clock" role="group" aria-label="Time lapse">
-          {(
-            [
-              [1, '1×'],
-              [60, '60×'],
-              [600, '600×'],
-            ] as const
-          ).map(([rate, label]) => (
-            <button
-              key={rate}
-              type="button"
-              aria-pressed={clockRate === rate}
-              onClick={() => setClockRate(rate)}
-            >
-              <span className="num">{label}</span>
-            </button>
-          ))}
-          {simLabel ? <p className="clock-time num">{simLabel}</p> : null}
-        </div>
         <p className="source">Tracked objects only, lower bound</p>
       </aside>
       <div className="rail">

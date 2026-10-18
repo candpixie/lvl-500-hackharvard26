@@ -216,12 +216,16 @@ export interface PlaceResult {
   dead_sat_lifetime_years: number
   objects_before: number
   note: string
+  band_inc_lo?: number
+  band_inc_hi?: number
+  band_tracked?: number
+  band_debris?: number
 }
 
 export async function placeAt(
   altKm: number,
   incDeg = 53,
-  count = 1000,
+  count = 1,
   dims: number[] = [4, 2, 1],
 ): Promise<PlaceResult> {
   const response = await fetch('/place', {
@@ -271,23 +275,6 @@ export async function rankLocations(region: string, altitudeKm?: number, top = 5
     throw new Error(typeof payload.detail === 'string' ? payload.detail : `Locations failed (${response.status})`)
   }
   return payload
-}
-
-export interface RankRow {
-  alt_lo: number
-  alt_hi: number
-  score: number
-  collisions_per_year: number
-  dead_sat_lifetime_years: number
-  objects: number
-  reason: string
-}
-
-export async function rankShells(count: number, top = 5, dims: number[] = [4, 2, 1]): Promise<RankRow[]> {
-  const response = await fetch(`/rank?dims=${dims.join(',')}&count=${count}&top=${top}`)
-  if (!response.ok) throw new Error(`Rank failed (${response.status})`)
-  const payload = (await response.json()) as { rows?: RankRow[] }
-  return payload.rows ?? []
 }
 
 export interface NearMiss {

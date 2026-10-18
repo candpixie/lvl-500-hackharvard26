@@ -11,8 +11,7 @@ import {
 } from './events.ts'
 
 const PROMPTS = [
-  { label: '1,000 sats', question: 'Where should I put 1,000 four-meter satellites?' },
-  { label: '1M at 900 km', question: 'What happens if SpaceX puts a million satellites at 900 km?' },
+  { label: 'One satellite', question: 'Where should I put one four-meter satellite?' },
   { label: 'Why 800 km', question: 'Why is 800 km so bad?' },
   { label: 'Near miss', question: "What's the closest near miss this week?" },
   { label: 'Over China', question: 'Where can I put a satellite over China?' },

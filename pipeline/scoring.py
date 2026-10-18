@@ -57,10 +57,20 @@ def score(f, dims_m, count):
 
 
 def place(alt_km, inc_deg, dims_m, count=1):
-    """Everything POST /place returns. inc_deg is not used by the shell model yet (density is per shell)."""
+    """Shell score, then shifted by how crowded this 10° inclination band is.
+
+    The shell model (lifetime, density, first-order rate) is the same for every
+    inclination. The shift uses tracked objects in the band versus the other
+    bands in that shell: a fuller band scores lower, a quieter band scores higher.
+    Tracked objects only, a lower bound. A band with nothing tracked is not empty space.
+    """
     f, r = factors(alt_km, dims_m, count)
-    s, _ = score(f, dims_m, count)
-    return {
+    shell_score, _ = score(f, dims_m, count)
+    band = _band(alt_km, inc_deg)
+    shifted = shell_score
+    if band is not None:
+        shifted = round(min(100.0, max(0.0, shell_score + (band["quiet"] - 0.5) * 24)), 1)
+    out = {
         "alt_km": alt_km, "inc_deg": inc_deg, "dims_m": list(dims_m), "count": count,
         "shell": r["shell"],
         "objects_before": r["objects_before"],
@@ -70,8 +80,50 @@ def place(alt_km, inc_deg, dims_m, count=1):
         "close_passes": None,
         "nearest": None,
         "dead_sat_lifetime_years": f["lifetime"],
-        "score": s,
+        "score": shifted,
+        "shell_score": shell_score,
         "note": "tracked objects only, lower bound",
+    }
+    if band is not None:
+        out["band_inc_lo"] = band["inc_lo"]
+        out["band_inc_hi"] = band["inc_hi"]
+        out["band_tracked"] = band["total"]
+        out["band_debris"] = band["debris"]
+    return out
+
+
+def _band(alt_km, inc_deg):
+    """Quietness of this inclination band inside its 50 km shell. 1 = fewest tracked objects."""
+    from locations import _grid
+
+    if not math.isfinite(alt_km) or not math.isfinite(inc_deg):
+        return None
+    alt_lo = int(math.floor(alt_km / 50.0) * 50)
+    inc = min(max(float(inc_deg), 0.0), 180.0)
+    inc_lo = 170 if inc >= 180 else int(math.floor(inc / 10.0) * 10)
+    rows = [row for row in _grid() if row["alt_lo"] == alt_lo]
+    if not rows:
+        return None
+    cell = next((row for row in rows if row["inc_lo"] == inc_lo), None)
+    if cell is None:
+        return None
+    def quietness(values, value):
+        lo, hi = min(values), max(values)
+        if hi == lo:
+            return 1.0
+        return 1.0 - (value - lo) / (hi - lo)
+
+    debris = [float(row.get("DEB") or 0) for row in rows]
+    totals = [float(row["total"]) for row in rows]
+    # Debris and satellites both crowd a band. Each is scaled against the other bands
+    # in this shell, then averaged, so a band full of either one scores lower.
+    quiet = 0.5 * quietness(debris, float(cell.get("DEB") or 0)) + 0.5 * quietness(totals, float(cell["total"]))
+    return {
+        "inc_lo": cell["inc_lo"],
+        "inc_hi": cell["inc_hi"],
+        "total": float(cell["total"]),
+        "debris": float(cell.get("DEB") or 0),
+        "quiet": quiet,
     }
 
 
