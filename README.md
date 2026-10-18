@@ -243,7 +243,7 @@ archive/        our first idea (orbital data center carbon payback), kept for re
 ## Team
 
 Built at HackHarvard 2026 by
-- **Candy Xie:** the 3D globe and web app, the four-step mission flow, the original data pipeline, merging everyone's work, and end-to-end QA.
+- **Candy Xie:** the 3D globe and web app, the four-step mission flow, data pipeline, UI & design fixes.
 - **David Liu:** the API and the Grok agent (voice, function calling, Imagine), the collision and placement scoring model, and "over a place."
 - **Sarah Ling:** the Chalk ask service and the Agent Evals on Chalk, including the eval that caught our wrong first metric.
 - **Evan Liu:** the Chalk-first agent flow with local fallback, the globe events that connect answers to the map, saved placements, and the home page.
