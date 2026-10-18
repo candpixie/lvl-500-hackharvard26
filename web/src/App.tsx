@@ -7,7 +7,6 @@ import {
   Line,
   LineBasicMaterial,
   Points,
-  PointsMaterial,
   ShaderMaterial,
   Vector3,
   type MeshPhongMaterial,
@@ -23,7 +22,7 @@ import { imagineGrok, neighborhoodPrompt } from './events.ts'
 import { createFleet, type Fleet } from './fleet.ts'
 import NeighborhoodCard from './NeighborhoodCard.tsx'
 import ObjectCard from './ObjectCard.tsx'
-import { RING_DRAW_CAP, type ObjectFact, type OrbitCounts, type WorkerOut } from './orbit.ts'
+import { type ObjectFact, type OrbitCounts, type WorkerOut } from './orbit.ts'
 import PlacePanel from './PlacePanel.tsx'
 import {
   GLOBE_RADIUS,
@@ -37,7 +36,6 @@ import {
   exaggeratePoint,
   neighborhoodAround,
   neighborhoodInShell,
-  pickNearest,
   screenNearest,
 } from './pick.ts'
 import { shellBounds, type ShellRow } from './shells.ts'
@@ -61,7 +59,7 @@ function catalogFrom(positions: Float32Array, facts: ObjectFact[], altitudes: Fl
 }
 
 const LEGEND: { key: keyof OrbitCounts; label: string; color: string }[] = [
-  { key: 'satellite', label: 'satellite', color: '#C9D6E3' },
+  { key: 'satellite', label: 'satellite', color: '#F7FAFF' },
   { key: 'debris', label: 'debris', color: '#F2A541' },
   { key: 'rocket body', label: 'rocket body', color: '#8C7AE6' },
   { key: 'unknown', label: 'unidentified', color: '#8B97A6' },
@@ -129,7 +127,6 @@ const pointVertex = `
     float inside = step(uShellMin, aAlt) * step(aAlt, uShellMax);
     float debris = step(0.5, aKind);
     vColor = mix(color, vec3(1.0, 0.62, 0.1), debris);
-    if (inside > 0.5 && debris < 0.5) vColor = vec3(0.97, 0.98, 1.0);
     if (debris > 0.5) vAlpha = mix(0.85, 1.0, inside);
     else vAlpha = mix(uDim, 1.0, inside);
     if (uHideOutside > 0.5) vAlpha *= inside;
@@ -600,25 +597,8 @@ export default function App() {
       return nativeUpdate()
     }
 
-    const ringPositions = new Float32Array(RING_DRAW_CAP * 3)
-    const ringGeometry = new BufferGeometry()
-    ringGeometry.setAttribute('position', new Float32BufferAttribute(ringPositions, 3))
-    ringGeometry.setDrawRange(0, 0)
-    const ringMaterial = new PointsMaterial({
-      color: '#67e8f9',
-      size: 4,
-      sizeAttenuation: false,
-      transparent: true,
-      opacity: 0.95,
-      depthWrite: false,
-    })
-    const ringCloud = new Points(ringGeometry, ringMaterial)
-    ringCloud.frustumCulled = false
-    globe.scene().add(ringCloud)
-
     const showModels = (on: boolean) => {
       if (cloud) cloud.visible = !on
-      ringCloud.visible = !on
       fleet?.setVisible(on)
       for (const material of materials) material.uniforms.uHideOutside.value = on ? 1 : 0
       if (on && positionsRef.current) fleet?.update(positionsRef.current)
@@ -626,7 +606,6 @@ export default function App() {
 
     const hideForSim = () => {
       if (cloud) cloud.visible = false
-      ringCloud.visible = false
       fleet?.setVisible(false)
       if (orbit) orbit.visible = false
       if (track) track.visible = false
@@ -879,13 +858,6 @@ export default function App() {
       }
       if (message.kind !== 'positions') return
       if (!cloud || !fleet || message.positions.length !== factsRef.current.length * 3) return
-      if (message.ring) {
-        const shown = Math.min(RING_DRAW_CAP, message.ring.length / 3)
-        const attr = ringCloud.geometry.getAttribute('position')
-        ;(attr.array as Float32Array).set(message.ring.subarray(0, shown * 3))
-        attr.needsUpdate = true
-        ringCloud.geometry.setDrawRange(0, shown)
-      }
       const label = new Date(message.simMs).toISOString().slice(0, 16).replace('T', ' ')
       if (label !== clockLabel) {
         clockLabel = label
@@ -911,8 +883,6 @@ export default function App() {
 
     let downX = 0
     let downY = 0
-    const origin = new Vector3()
-    const dir = new Vector3()
     const locate = globe as unknown as {
       toGlobeCoords(x: number, y: number): { lat: number; lng: number } | null
     }
@@ -943,17 +913,27 @@ export default function App() {
         return
       }
       const catalog = catalogRef.current
-      if (!catalog) return
-      const cam = globe.camera()
-      cam.updateMatrixWorld()
+      const positions = positionsRef.current
+      const pointAltitudes = altitudesRef.current
+      const kinds = kindsRef.current
+      if (!catalog || !positions || !pointAltitudes || !kinds) return
       const rect = canvas.getBoundingClientRect()
-      const ndcX = ((event.clientX - rect.left) / rect.width) * 2 - 1
-      const ndcY = -((event.clientY - rect.top) / rect.height) * 2 + 1
-      origin.setFromMatrixPosition(cam.matrixWorld)
-      dir.set(ndcX, ndcY, 0.5).unproject(cam).sub(origin).normalize()
-      const index = pickNearest(catalog.positions, origin, dir, catalog.names.length, ALTITUDE_EXAGGERATION)
-      if (index < 0) return
-      startVizRef.current(neighborhoodAround(index, catalog.positions, catalog.names, catalog.types, catalog.altitudes))
+      const index = screenNearest({
+        positions,
+        altitudes: pointAltitudes,
+        kinds,
+        camera: globe.camera(),
+        width: rect.width,
+        height: rect.height,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+        altitudeKm: altitudeRef.current,
+        debrisOnly: debrisOnlyRef.current,
+        radiusPx: 18,
+        shellOnly: false,
+      })
+      if (index == null) return
+      startVizRef.current(neighborhoodAround(index, positions, catalog.names, catalog.types, pointAltitudes))
     }
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointerup', onUp)
@@ -988,9 +968,6 @@ export default function App() {
       controlsRef.current = null
       releaseSpinRef.current = () => {}
       worker.terminate()
-      ringGeometry.dispose()
-      ringMaterial.dispose()
-      ringCloud.removeFromParent()
       dots.dispose()
       models.dispose()
       orbitMaterial.dispose()
@@ -1218,50 +1195,38 @@ export default function App() {
             if (hood) startViz(hood)
           }}
         />
-        <div className="legend-block">
-          <ul className="legend">
-            {LEGEND.map((item) => (
-              <li key={item.key}>
-                <span className="swatch" style={{ background: item.color }} />
-                <span>{item.label}</span>
-              </li>
-            ))}
-            <li>
-              <span className="swatch swatch-constellation" />
-              <span>
-                your constellation
-                {count > RING_DRAW_CAP ? (
-                  <span className="legend-count num">
-                    {' '}
-                    showing {RING_DRAW_CAP.toLocaleString('en-US')} of {count.toLocaleString('en-US')}
-                  </span>
-                ) : null}
-              </span>
-            </li>
-          </ul>
-          <div className="clock" role="group" aria-label="Time lapse">
-            {(
-              [
-                [1, '1×'],
-                [60, '60×'],
-                [600, '600×'],
-              ] as const
-            ).map(([rate, label]) => (
-              <button
-                key={rate}
-                type="button"
-                aria-pressed={clockRate === rate}
-                onClick={() => setClockRate(rate)}
-              >
-                <span className="num">{label}</span>
-              </button>
-            ))}
-            {simLabel ? <p className="clock-time num">{simLabel}</p> : null}
-          </div>
+        <div className="clock" role="group" aria-label="Time lapse">
+          {(
+            [
+              [1, '1×'],
+              [60, '60×'],
+              [600, '600×'],
+            ] as const
+          ).map(([rate, label]) => (
+            <button
+              key={rate}
+              type="button"
+              aria-pressed={clockRate === rate}
+              onClick={() => setClockRate(rate)}
+            >
+              <span className="num">{label}</span>
+            </button>
+          ))}
+          {simLabel ? <p className="clock-time num">{simLabel}</p> : null}
         </div>
         <p className="source">Tracked objects only, lower bound</p>
       </aside>
-      {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
+      <div className="rail">
+        <ul className="legend" aria-label="Colors">
+          {LEGEND.map((item) => (
+            <li key={item.key}>
+              <span>{item.label}</span>
+              <span className="swatch" style={{ background: item.color }} />
+            </li>
+          ))}
+        </ul>
+        {close && fact && !sim && <ObjectCard fact={fact} liveKm={liveKm} />}
+      </div>
       <AgentPanel
         altitude={altitude}
         count={count}

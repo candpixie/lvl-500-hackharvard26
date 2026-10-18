@@ -17,7 +17,7 @@ const MU_KM3_S2 = 398600.4418
 const ALTITUDE_EXAGGERATION = 5.5
 
 const COLOR: Record<keyof OrbitCounts, readonly [number, number, number]> = {
-  satellite: [0xc9 / 255, 0xd6 / 255, 0xe3 / 255],
+  satellite: [0.97, 0.98, 1],
   debris: [0xf2 / 255, 0xa5 / 255, 0x41 / 255],
   'rocket body': [0x8c / 255, 0x7a / 255, 0xe6 / 255],
   unknown: [0x8b / 255, 0x97 / 255, 0xa6 / 255],
