@@ -1,99 +1,228 @@
-# orbit-payback (working name, rename TBD)
+<p align="center">
+  <img src="docs/media/lvl500-banner.png" alt="LVL 500: find a parking spot in orbit" width="100%">
+</p>
 
-HackHarvard 2026. **Before you launch, see how crowded your orbit is and what's flying near it.**
-Pick what you want to put in space and where (altitude, inclination). We place it among every tracked
-satellite and piece of debris, show what's close and how risky the neighborhood is, and suggest
-better spots.
+<h1 align="center">LVL 500</h1>
 
-## Why now
-- SpaceX filed (Jan 30 2026) for up to **1 million** orbital data center satellites.
-  Low Earth orbit holds about **29,000** tracked objects today. Where would a million more go?
-- Working satellites crowd the low shells (450 to 500 km: about 10,000 objects, mostly Starlink),
-  where air drag clears dead ones within years.
-- Debris piles up higher (750 to 850 km: about 3,300 objects, mostly debris), where drag can't
-  clear it for a very long time. Junk lives where nature can't clean it up.
-- Real example from this week's predictions: working satellite NuSat-47 is predicted to pass
-  **12 meters** from a piece of Fengyun-1C debris (from a 2007 missile test) at 14.5 km/s on Oct 22.
-  (SOCRATES prediction, verify before using on a slide.)
+<p align="center"><b>A parking garage map for orbit.</b><br>
+Before you launch, see how crowded your altitude is and how long your wreckage would stay up.</p>
 
-## MVP (in this order)
-1. Plot every object we have on a 3D globe, colored by type (satellite, debris, rocket body).
-2. User places their object (altitude + inclination, maybe size).
-3. Show what's near it and how crowded that shell is.
-4. Then make it cool: zoom, click an object for its story, suggest better spots.
+<p align="center">
+  Built at <b>HackHarvard 2026</b> &nbsp;·&nbsp; Track: <b>ASUS Sustainability</b> &nbsp;·&nbsp;
+  Challenges: <b>SpaceX AI</b>, <b>Best Data-Driven Agent on Chalk</b>
+</p>
 
-## Prizes we're aiming at
-- **SpaceX AI "Make It Legendary":** real space data (yes), built in **Cursor** (log it), plus Grok
-  Imagine or Voice (still to decide how).
-- **Sustainability track:** space sustainability, debris that stays up for a very long time.
-- **Chalk "Data-Driven Agent":** judged on impact, data and evals. Open question: what's the
-  agent? SOCRATES close approaches can be the eval answer key.
+---
 
-## Data (`docs/data.md` has the full inventory)
-| What | Source | In our build |
+## The problem
+
+**Orbit is an environment, and it is filling up.**
+
+- About **35,000** objects are tracked in Earth orbit, about **29,000** of them below 2,000 km ([CelesTrak SATCAT](https://celestrak.org/satcat/), Oct 2026).
+- Starlink satellites made **207,152** collision-avoidance maneuvers from December 2025 to May 2026, up from **148,696** in the six months before, according to SpaceX's reports to the FCC ([Space Intel Report](https://www.spaceintelreport.com/spacex-148696-starlink-collision-maneuvers-in-6-months-ending-nov-30-continued-issues-with-operators-slipshod-reporting/), [n2yo](https://www.n2yo.com/satellite-news/Every-SpaceX-Starlink-satellite-has-to-dodge-a-collision-almost-weekly-and-experts-fear-the-worst/11012)).
+- On January 30, 2026, SpaceX asked the FCC for permission to launch up to **1 million** orbital data center satellites ([Engadget](https://www.engadget.com/science/space/spacex-wants-to-launch-a-constellation-of-a-million-satellites-to-power-ai-needs-175607771.html), [Fortune](https://www.fortune.com/2026/02/01/spacex-fcc-approval-filing-data-center-constellation-space-construction-ai)).
+
+Every satellite that dies up there becomes debris someone else has to dodge, and nobody can send a cleanup crew. **Where you park matters more than anything you do after launch**: at 500 km a dead satellite falls out of orbit in about a decade, at 800 km it stays for well over a century.
+
+## What it is
+
+LVL 500 treats orbit like a parking garage. Every altitude is a level. Some levels are packed with working satellites, some are full of junk that won't leave for centuries.
+
+**Say what you're launching → pick a level (or a place to fly over) → see the impact → save and compare**
+
+- **Every tracked object on one globe.** About 20,000 satellites, debris and rocket bodies with public orbits, positioned live with SGP4 and colored by type. Dots far away, 3D models up close.
+- **Your mission.** Pick a kind of satellite or a custom size, and how many.
+- **Pick a level.** Drag the altitude and inclination. The shell lights up and the Impact card shows a 0 to 100 placement score, expected collisions per year and how long a dead satellite would stay up.
+- **Over a place.** Pick Africa, China or Europe, or type a country. A low orbit can't hover over one spot, so LVL 500 ranks the orbit tilts that cross it, quietest debris first, and draws the ground track.
+- **Save and compare.** Keep placements side by side.
+- **Show debris only.** Hide everything that still works and see where the junk is.
+- **Ask Grok.** Type or talk: "Where should I put one four-meter satellite?" Grok calls our tools, answers out loud with real numbers, and the globe flies to the shell it means.
+- **Real near misses.** The closest predicted approach this week from SOCRATES. In this snapshot, NuSat-47 is predicted to pass **12 m** from a piece of Fengyun-1C debris at **14.5 km/s** on Oct 22.
+
+Every risk number counts **tracked objects only, so it is a lower bound**. Pieces under about 10 cm aren't tracked.
+
+<p align="center">
+  <img src="docs/media/lvl500-placement.jpg" alt="One four-meter satellite placed at 525 km and 53 degrees: the shell's orbit drawn around the globe, the Impact card reads 90.1 out of 100 with wreckage clearing in about 11 years" width="90%">
+</p>
+
+## Sustainability: why the score works the way it does
+
+Crowding today is only half the story. The other half is **how long your wreckage pollutes that level**. So the score weighs harm, which is expected collisions times the years a dead satellite stays up.
+
+| One 4×2×1 m satellite at 53° | Score | Wreckage stays up |
 |---|---|---|
-| Orbits of 16,754 active satellites | CelesTrak GP `active` | yes |
-| Orbits of about 2,700 debris pieces from big breakups | CelesTrak GP debris groups | yes |
-| 594 tracked but unidentified objects | CelesTrak GP `analyst` | yes |
-| Every tracked object: type, owner, launch date, radar size, altitude | CelesTrak SATCAT | yes |
-| 195,841 predicted close approaches, next 7 days | CelesTrak SOCRATES | top 500 in `close_approaches.json` |
-| Orbits of **all** debris and rocket bodies (about 30,000) | Space-Track.org, free account | **not yet** |
+| 525 km | **90** / 100 | about 11 years |
+| 775 km | **47** / 100 | about 168 years |
 
-Coverage today: orbits for 20,038 of 35,044 tracked objects. We're missing most debris and almost
-all rocket bodies. Space-Track fills that in. Read its user agreement first, and never commit its data.
+Same satellite, 250 km higher, and its junk lingers about 15 times longer. Low shells are busier with working satellites, but air drag clears them. Higher shells keep the debris.
 
-## Get the data
-Needs [uv](https://docs.astral.sh/uv/). From the repo root:
+<p align="center">
+  <img src="docs/media/lvl500-debris.jpg" alt="Show debris only: orange debris points around the globe, with the satellites hidden" width="90%">
+</p>
 
-```sh
-uv run python pipeline/fetch_orbits.py    # downloads into data/raw/celestrak/ (not committed)
-uv run python pipeline/build_objects.py   # writes data/out/objects.json + close_approaches.json
-uv run python pipeline/leo_shells.py      # (optional) crowding by 50 km shell
+## How it works
+
+| Piece | What we used it for |
+|---|---|
+| **CelesTrak** | Orbit elements (OMM) for about 16,750 active satellites and the major debris clouds, the full satellite catalog (35,000+ objects), and SOCRATES predicted close approaches for the next 7 days. |
+| **satellite.js (SGP4)** | Positions for every object, in a Web Worker once a second. Checked against a live ISS tracker within about 2 km. |
+| **three.js + globe.gl** | The globe. All objects are one GPU point cloud so it stays smooth, with instanced 3D satellite models when you zoom in. Altitude is exaggerated and labeled "not to scale." |
+| **Python pipeline** | Turns the catalog into 50 km shells with density, a first-order collision rate and a wreckage lifetime, then scores and ranks placements. |
+| **FastAPI** | `/place`, `/rank`, `/locations`, `/close_approaches`, and the agent routes `/ask`, `/listen`, `/speak`, `/imagine`. |
+| **Grok** (xAI) | The agent with function calling, Grok Voice (speech in and out) and Grok Imagine. |
+| **Chalk** | The ask service Grok calls first, and Agent Evals that test our answers against real data. |
+| **Cursor** | Where we built it. |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph data [Data, build time]
+    CT[CelesTrak: orbits, SATCAT, SOCRATES] --> P[pipeline/ Python]
+    P --> D[data/out JSON]
+  end
+
+  subgraph browser [Browser]
+    D --> W[web/ React + globe.gl]
+    W --> SGP[SGP4 Web Worker]
+  end
+
+  U[You: type or talk] --> W
+  W -->|/place /rank /locations| A[api/ FastAPI]
+  W -->|/ask /listen /speak| A
+  A -->|function calls| G[Grok]
+  G -->|ask_chalk| C[Chalk ask service]
+  C --> D
+  A -->|focus: altitude, inclination| W
 ```
 
-CelesTrak blocks repeat downloads of the same group for about 2 hours. The fetch script keeps
-anything newer than that, so it's safe to rerun.
+One question, start to finish:
 
-### `data/out/objects.json`
-One entry per object: `norad`, `name`, `type`, `owner`, `launch_date`, `radar_size_m2`,
-`apogee_km`, `perigee_km`, `constellation`, `groups`, and `omm` (the orbit elements).
-It's 14 MB and regenerated, so it's in `.gitignore`.
+```mermaid
+flowchart TD
+  Q["Where should I put one four-meter satellite?"] --> STT[Grok speech to text]
+  STT --> Agent[Grok agent]
+  Agent -->|first tool call| Chalk[Chalk ask service: placement model + SOCRATES]
+  Chalk -->|answer, focus, sources| Agent
+  Agent -.->|if Chalk is unreachable| Local[Same model, local tools]
+  Local -.-> Agent
+  Agent --> Say[Grok text to speech reads the answer]
+  Agent --> Fly[Globe flies to the recommended shell]
+```
 
-### `data/out/close_approaches.json`
-The 500 closest predicted approaches, with same-constellation pairs and objects flying together
-removed: both objects, time, miss distance (km), relative speed (km/s), max probability.
+| Piece | Where |
+|---|---|
+| Globe, panels, Grok bar | `web/src/App.tsx`, `PlacePanel.tsx`, `AgentPanel.tsx` |
+| SGP4 propagation | `web/src/propagate.worker.ts` |
+| Home page | `web/src/Home.tsx`, `Stars.tsx` |
+| API and the Grok agent | `api/main.py`, `api/agent.py` |
+| Chalk client | `api/chalk.py` |
+| Chalk ask service and evals | `chalk_tools/` |
+| Collision model and scoring | `pipeline/orbit_data.py`, `pipeline/scoring.py` |
+| Over a place | `pipeline/locations.py` |
 
-## Positions (how the globe moves)
-- Nobody publishes positions directly. We get orbit elements and compute positions with **SGP4**.
-- In the browser, use `satellite.js` **6.0 or later**. `json2satrec(obj.omm)` reads our OMM directly.
-  Version 5 doesn't have it.
-- Checked Fri night: all 16,754 active satellites propagate in about 100 ms, and our ISS position
-  matched a live tracker within about 2 km.
-- To avoid lag: run SGP4 in a **Web Worker** about once a second, draw everything as **one GPU point
-  cloud**, and let the GPU animate between updates. Don't precompute timelines (hundreds of MB).
+## Sponsors
 
-## Rules
-- Say "crowding" or "close approach", never "collision probability" unless it's SOCRATES's own number.
-- Every number on screen has a source.
-- Any Grok image or video is illustration and labeled that way. Data is drawn from data.
-- The web app is built in Cursor (SpaceX AI requirement). Keep a log of Cursor and Grok Bot use.
-- Don't commit `data/raw/`, `objects.json` or anything from Space-Track.
+### ASUS Sustainability track
+Space is the next environment we're about to pollute. LVL 500 is built around one decision that happens before launch, where to park, and it scores that decision by how long the wreckage would pollute the level, not just by how busy it is today.
 
-## Working together
-- One branch per person, PRs into `main`.
-- Rename the repo once we have a name.
+### SpaceX AI (Grok, built in Cursor)
+- **Grok agent with function calling** (`api/agent.py`). Every number Grok says comes from a tool call over our data, never from memory. Tools include `place_satellites`, `rank_shells`, `rank_locations`, `get_close_approaches` and `ask_chalk`.
+- **Grok Voice.** Speech to text in (`/listen`) and text to speech out (`/speak`), so you can talk to the map.
+- **Grok Imagine** (`/imagine`). Illustrates a neighborhood of objects, always labeled as an illustration.
+- **Real space data in.** CelesTrak orbits, the satellite catalog and SOCRATES conjunctions.
+- **Built in Cursor.**
 
-## Layout
-- `pipeline/` Python, offline. Fetches and builds the JSON the web app reads.
-- `data/out/` built data (small files committed, big ones ignored).
-- `docs/data.md` data inventory and gotchas.
-- `web/` frontend (Cursor).
-- `archive/carbon-payback/` our first direction, kept for reference.
+### Chalk: data-driven agent with evals
+- **Ask service on Chalk** (`chalk_tools/ask_app.py`, `ask_core.py`). Grok's first tool call posts the question to a service we deployed on Chalk. It runs our placement model and SOCRATES data and returns `{answer, focus, tool_calls}`. No LLM runs inside it, so answers are repeatable.
+- **Agent Evals on Chalk.** Two evaluations, with full method and limits in [`docs/eval_results.md`](docs/eval_results.md).
 
-## Sources
-- CelesTrak GP data, SATCAT and SOCRATES: https://celestrak.org
-- Space-Track.org (18th Space Defense Squadron): https://www.space-track.org
-- satellite.js (SGP4 in JavaScript), skyfield (Python)
+**1. Does the crowding index steer away from real near misses?** 17 missions from 400 to 1,200 km, SOCRATES as the answer key (1.0 = the shell with the fewest predicted near misses).
 
-## License
-MIT. See LICENSE.
+| Picker | Mean score |
+|---|---|
+| Crowding index (`recommend_orbit`) | 0.851 |
+| Fewest objects in the same plane | 0.839 |
+| Random | 0.505 |
+
+It tracks where predicted near misses cluster (rank correlation 0.71) and beats random in 16 of 17 missions. It does **not** beat simple rules. Our first version counted every orbit that crosses a shell and scored 0.53, and the eval is how we caught it.
+
+**2. Does the ask service give clean, grounded answers?** 58 questions on the same code the live `/ask` uses.
+
+| Check | Result |
+|---|---|
+| "Where should I put it" answers stay out of the 750 to 850 km debris band, with wreckage under 25 years | 26 / 26 |
+| Every number comes from a tool result, the tool arguments or the question | 58 / 58 |
+| No "safe" and no invented collision probability | 58 / 58 |
+
+The two evals measure different things. Our score ranks by long-term harm, so it favors low shells where debris clears fast. Low shells are also where this week's near misses cluster (500 to 550 km scores 0.13 on the near-miss key). We'd rather show that tradeoff than hide it.
+
+## The math
+
+**Expected collisions per year** (first-order kinetic-gas model, `pipeline/orbit_data.py`):
+
+$$ \dot{C} = N \cdot n \, v_{\text{rel}} \, \pi \left( \tfrac{L}{2} + r_d \right)^2 \cdot T_{\text{yr}} $$
+
+where $N$ is how many satellites you place, $n$ is the shell's tracked-object density (including the ones you add), $v_{\text{rel}} = 10$ km/s is a typical relative speed, $L$ is the satellite's longest side, $r_d = 0.5$ m is a typical debris radius, and $T_{\text{yr}}$ converts per second to per year.
+
+**Placement score** (`pipeline/scoring.py`), 0 to 100, higher is better:
+
+$$ S = 100 \left( 1 - 0.8\,b_{\text{harm}} - 0.1\,b_{\text{coll}} - 0.1\,b_{\text{dens}} \right) $$
+
+Each $b$ is how bad that factor is (0 best, 1 worst, log scale) compared with other placements. **Harm** is expected collisions per year times the years a dead satellite stays up. The Impact card scores your inclination band within the shell. Lifetimes come from rule-of-thumb decay anchors and are uncertain by about 10× either way.
+
+At very large counts (a million satellites at 900 km gives about 185,000 collisions a year), a first-order model is far outside where it holds. Read those numbers as "don't," not as a forecast.
+
+## Run it locally
+
+Needs [uv](https://docs.astral.sh/uv/) and Node 20+. From the repo root:
+
+```sh
+uv sync
+uv run python pipeline/fetch_orbits.py      # download orbits, catalog, SOCRATES into data/raw/
+uv run python pipeline/build_objects.py     # data/out/objects.json (gitignored, ~14 MB)
+
+cp .env.example .env                        # fill in the keys below
+uv run uvicorn api.main:app --port 8000     # API, check http://127.0.0.1:8000/health
+
+cd web && npm ci && npm run dev             # app at http://localhost:5173
+```
+
+The other built files (`data/out/*.json`, `web/public/launch_kinds.json`) are committed. To rebuild them after a fresh fetch: `leo_shells.py`, `orbit_data.py`, `build_tools_data.py`, `build_launch_kinds.py` in `pipeline/`.
+
+`.env` (names only): `XAI_API_KEY` for Grok, and `CHALK_ASK_URL`, `CHALK_TOKEN`, `CHALK_ENV_ID` for the Chalk service. Without `XAI_API_KEY` the globe, placement, ranking and near misses still work. Without the Chalk values, Grok uses the same model locally (`/health` shows `"reasoner": "local"`).
+
+```sh
+uv run python -m chalk_tools.eval_local         # crowding-index eval, locally
+uv run python -m chalk_tools.junk_eval_local    # ask-service eval, locally
+uv run --with pytest python -m pytest -q        # tests
+```
+
+CelesTrak throttles repeat downloads of the same group for about 2 hours, so `fetch_orbits.py` keeps anything newer than that.
+
+## Repository
+
+```
+web/            the app: home page, globe, panels, Grok bar
+api/            FastAPI server and the Grok agent
+chalk_tools/    Chalk ask service, evals and scorers
+pipeline/       data fetch, shells, collision and scoring model
+data/out/       built data (objects.json is gitignored)
+docs/           API, data, Chalk service and eval write-ups
+tests/          tests for the tools, scorers and Chalk wiring
+archive/        our first idea (orbital data center carbon payback), kept for reference
+```
+
+## Team
+
+Built at HackHarvard 2026 by
+- **Candy Xie:** the 3D globe and web app, the four-step mission flow, the original data pipeline, merging everyone's work, and end-to-end QA.
+- **David Liu:** the API and the Grok agent (voice, function calling, Imagine), the collision and placement scoring model, and "over a place."
+- **Sarah Ling:** the Chalk ask service and the Agent Evals on Chalk, including the eval that caught our wrong first metric.
+- **Evan Liu:** the Chalk-first agent flow with local fallback, the globe events that connect answers to the map, saved placements, and the home page.
+
+## Credits
+
+Orbital data from [CelesTrak](https://celestrak.org) (Dr. T.S. Kelso), derived from US Space Force tracking. Land outlines from [Natural Earth](https://www.naturalearthdata.com) (public domain). [satellite.js](https://github.com/shashwatak/satellite-js), [globe.gl](https://github.com/vasturiano/globe.gl), [three.js](https://threejs.org), [skyfield](https://rhodesmill.org/skyfield/) and FastAPI (all MIT). Fonts: Geist, Geist Mono and Jost (SIL OFL). `archive/carbon-payback/espas/`: [ESpaS](https://gitlab.com/sustainable-computing-systems/espas) (MIT / Apache-2.0).
+
+MIT License. See [LICENSE](LICENSE).
