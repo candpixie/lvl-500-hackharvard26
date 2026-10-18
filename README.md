@@ -45,9 +45,31 @@ Every risk number counts **tracked objects only, so it is a lower bound**. Piece
   <img src="docs/media/lvl500-placement.jpg" alt="One four-meter satellite placed at 525 km and 53 degrees: the shell's orbit drawn around the globe, the Impact card reads 90.1 out of 100 with wreckage clearing in about 11 years" width="90%">
 </p>
 
-## Sustainability: why the score works the way it does
+## Why orbit is a sustainability problem
 
-Crowding today is only half the story. The other half is **how long your wreckage pollutes that level**. So the score weighs harm, which is expected collisions times the years a dead satellite stays up.
+**Orbit is a shared resource, and it doesn't clean itself up.** Low down, around 500 km, thin air drags dead objects down within about a decade. Higher up, they can circle for decades or centuries. When two of them collide, they become thousands of new pieces that can hit something else, the cascade known as Kessler syndrome.
+
+**The damage from one bad day lasts a lifetime.** From the CelesTrak catalog we load (Oct 2026):
+
+| Event | Pieces cataloged | Still in orbit today | Typical altitude now |
+|---|---|---|---|
+| Fengyun-1C, destroyed in a 2007 missile test | 3,531 | **2,311** (65%) | about 830 km |
+| Iridium 33 and Cosmos 2251 collide, 2009 | 2,370 | **725** (31%) | about 720 km |
+
+Nineteen years later, two-thirds of the Fengyun-1C cloud is still up there, and one of its pieces is predicted to pass 12 m from a working satellite on Oct 22. ESA's 2026 Space Environment Report models that debris in low Earth orbit would keep growing **even if no one launched anything again**, because the objects already up there keep colliding ([ESA report](https://www.sdo.esoc.esa.int/publications/Space_Environment_Report_I10R0_20260501.pdf), [summary](https://newspaceeconomy.ca/2026/09/17/what-does-esas-new-report-reveal-about-the-risks-facing-satellites/)).
+
+**Earth's sustainability depends on orbit too.** Of the 55 Essential Climate Variables used to track climate change, ESA counts **38** as measured only or mostly from space ([ESA Climate Office](https://climate.esa.int/en/The-climate-challenge)). Sea level, ice sheets and greenhouse gases are watched from the same shells we're filling. A level lost to debris is a level we can't use to watch the planet.
+
+**Prevention is the only cleanup that works today.** No one can sweep up thousands of fragments yet. The cheapest moment to protect orbit is before launch, when an operator picks the level. The FCC agreed in 2022 and cut the deorbit deadline for low-orbit satellites from 25 years to **5 years** after the mission ends ([Via Satellite](https://www.satellitetoday.com/government-military/2022/09/30/fcc-adopts-5-year-rule-for-deorbiting-satellites/)).
+
+### How LVL 500 builds that in
+
+- **The score is 80% long-term harm.** Harm is expected collisions per year times the years a dead satellite stays up, so a quiet but high shell where junk lingers for a century scores badly.
+- **Wreckage lifetime is on the Impact card** next to the score, in years, for every placement.
+- **Show debris only** makes the problem visible: the junk sits higher than the working satellites.
+- **Every number is a lower bound** (tracked objects only), so we never call a level "safe."
+
+Crowding today is only half the story. The other half is **how long your wreckage pollutes that level**.
 
 | One 4×2×1 m satellite at 53° | Score | Wreckage stays up |
 |---|---|---|
@@ -55,6 +77,11 @@ Crowding today is only half the story. The other half is **how long your wreckag
 | 775 km | **47** / 100 | about 168 years |
 
 Same satellite, 250 km higher, and its junk lingers about 15 times longer. Low shells are busier with working satellites, but air drag clears them. Higher shells keep the debris.
+
+**What we don't solve yet:**
+- Even the best level here takes about 11 years to clear on its own, longer than the FCC's 5 years. A good level is not a substitute for a deorbit plan.
+- Satellites that fall from low shells burn up in the upper atmosphere. Modeling suggests the aluminum oxide they leave behind could slow ozone recovery as megaconstellations grow ([Ferreira et al., *Geophysical Research Letters*, 2024](https://doi.org/10.1029/2024GL109280)). We don't count that cost yet.
+- Lifetimes are rule-of-thumb estimates, uncertain by about 10× either way with solar activity and the satellite's shape.
 
 <p align="center">
   <img src="docs/media/lvl500-debris.jpg" alt="Show debris only: orange debris points around the globe, with the satellites hidden" width="90%">
@@ -124,7 +151,7 @@ flowchart TD
 ## Sponsors
 
 ### ASUS Sustainability track
-Space is the next environment we're about to pollute. LVL 500 is built around one decision that happens before launch, where to park, and it scores that decision by how long the wreckage would pollute the level, not just by how busy it is today.
+Space is the next environment we're about to pollute, and the one we watch Earth's climate from. LVL 500 is built around one decision that happens before launch, where to park, and scores it by how long the wreckage would pollute that level, not just by how busy it is today. The full case, with data, is in [Why orbit is a sustainability problem](#why-orbit-is-a-sustainability-problem).
 
 ### SpaceX AI (Grok, built in Cursor)
 - **Grok agent with function calling** (`api/agent.py`). Every number Grok says comes from a tool call over our data, never from memory. Tools include `place_satellites`, `rank_shells`, `rank_locations`, `get_close_approaches` and `ask_chalk`.
