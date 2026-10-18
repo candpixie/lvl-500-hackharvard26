@@ -44,16 +44,30 @@ def test_demo_questions_match_the_documented_answers():
     assert r1["focus"]["count"] == 1000 and r1["focus"]["dims_m"] == [4.0, 2.0, 1.0]
     assert [row["alt_lo"] for row in r1["tool_calls"][0]["result"]] == [500, 550, 600]  # docs: safest 500/550/600
     r2 = A.answer(DEMO[1])
-    score_900 = r2["tool_calls"][0]["result"]["score"]
-    assert 41 <= score_900 <= 43 and r2["focus"]["altitude_km"] == 900  # docs: about 42
+    placed = r2["tool_calls"][0]["result"]
+    assert 41 <= placed["shell_score"] <= 43 and r2["focus"]["altitude_km"] == 900  # altitude model, about 42
+    assert placed["score"] != placed["shell_score"]  # the 10° band moves the number you see
     r3 = A.answer(DEMO[2])
     assert r3["focus"]["altitude_km"] == 825 and r3["tool_calls"][0]["result"]["DEB"] > r3["tool_calls"][0]["result"]["PAY"]
     r4 = A.answer(DEMO[3])
     assert "NUSAT-47" in r4["answer"] and "12 meters" in r4["answer"]  # docs: NuSat-47 vs Fengyun-1C, 12 m
 
 
-def test_million_satellites_at_550_scores_about_78():
-    assert 77 <= A.resolvers().scoring.place(550, 53, [4, 2, 1], 1_000_000)["score"] <= 79
+def test_million_satellites_at_550_shell_score_about_78():
+    result = A.resolvers().scoring.place(550, 53, [4, 2, 1], 1_000_000)
+    assert 77 <= result["shell_score"] <= 79
+
+
+def test_same_shell_score_moves_with_the_inclination_band():
+    scoring = A.resolvers().scoring
+    dims = [4, 2, 1]
+    starlink = scoring.place(480, 53, dims, 1)
+    debris = scoring.place(480, 97, dims, 1)
+    empty = scoring.place(480, 115, dims, 1)
+    assert starlink["shell_score"] == debris["shell_score"] == empty["shell_score"]
+    assert empty["score"] > starlink["score"] > debris["score"]
+    assert empty["band_tracked"] == 0
+    assert debris["band_debris"] > starlink["band_debris"]
 
 
 @pytest.mark.parametrize("q", DEMO + ["How crowded is 550 km?", "any near misses around 800 km", "What if I put one satellite at 600 km?"])

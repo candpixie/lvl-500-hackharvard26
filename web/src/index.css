@@ -31,39 +31,6 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.clock {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 10px 0 0;
-}
-
-.clock button {
-  font: inherit;
-  font-size: 12px;
-  line-height: 1;
-  color: #c9d6e3;
-  background: transparent;
-  border: 1px solid rgba(201, 214, 227, 0.28);
-  border-radius: 4px;
-  padding: 6px 8px;
-  cursor: pointer;
-}
-
-.clock button[aria-pressed='true'] {
-  color: #05070b;
-  background: #e7f27a;
-  border-color: #e7f27a;
-}
-
-.clock-time {
-  flex-basis: 100%;
-  margin: 0;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: rgba(201, 214, 227, 0.72);
-}
-
 .hud {
   position: fixed;
   top: 20px;
@@ -112,8 +79,8 @@ body {
   top: 0;
   bottom: 0;
   left: 0;
-  width: min(460px, 58vw);
-  background: linear-gradient(90deg, rgba(5, 7, 11, 0.94) 0%, rgba(5, 7, 11, 0.78) 62%, rgba(5, 7, 11, 0) 100%);
+  width: min(340px, 42vw);
+  background: linear-gradient(90deg, rgba(5, 7, 11, 0.82) 0%, rgba(5, 7, 11, 0.42) 68%, rgba(5, 7, 11, 0) 100%);
   pointer-events: none;
   z-index: -1;
 }
@@ -136,9 +103,9 @@ body {
 
 h1 {
   margin: 6px 0 0;
-  max-width: 12em;
+  max-width: 14em;
   font-family: 'Jost Variable', ui-sans-serif, sans-serif;
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 500;
   letter-spacing: -0.01em;
   line-height: 1.05;
@@ -310,6 +277,25 @@ h1 {
 
 input.place-input {
   width: 100%;
+}
+
+.fold {
+  margin-top: 12px;
+}
+
+.fold summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(201, 214, 227, 0.82);
+}
+
+.fold summary:hover {
+  color: #e7f27a;
+}
+
+.fold[open] summary {
+  margin-bottom: 8px;
 }
 
 .suggest {

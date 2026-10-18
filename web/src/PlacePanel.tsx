@@ -3,22 +3,14 @@ import {
   closestMiss,
   placeAt,
   rankLocations,
-  rankShells,
   type LocationRank,
   type LocationSlot,
   type NearMiss,
   type PlaceResult,
-  type RankRow,
 } from './events.ts'
 import { majorityLabel, shellForAltitude, shellRange, shellTotal, type ShellRow } from './shells.ts'
 
 const PLACE_CHIPS = ['Africa', 'China', 'Europe']
-
-const COUNTS = [
-  { label: '1', value: 1 },
-  { label: '1,000', value: 1000 },
-  { label: '1,000,000', value: 1_000_000 },
-]
 
 function formatCount(value: number) {
   return value.toLocaleString('en-US')
@@ -42,7 +34,7 @@ function formatLength(value: number) {
 }
 
 function scoreTone(score: number) {
-  if (score >= 70) return 'safer'
+  if (score >= 70) return 'quieter'
   if (score >= 45) return 'mixed'
   return 'crowded'
 }
@@ -84,7 +76,6 @@ interface PlacePanelProps {
   debrisOnly: boolean
   onAltitude: (value: number) => void
   onInclination: (value: number) => void
-  onCount: (value: number) => void
   onSize: (value: number) => void
   onDebrisOnly: (value: boolean) => void
   onScene: (scene: {
@@ -117,7 +108,6 @@ export default function PlacePanel({
   debrisOnly,
   onAltitude,
   onInclination,
-  onCount,
   onSize,
   onDebrisOnly,
   onScene,
@@ -129,9 +119,6 @@ export default function PlacePanel({
 }: PlacePanelProps) {
   const current = shells ? shellForAltitude(shells, altitude) : null
   const [place, setPlace] = useState<PlaceResult | null>(null)
-  const [scoredAltitude, setScoredAltitude] = useState<number | null>(null)
-  const [ranks, setRanks] = useState<RankRow[]>([])
-  const [showRanks, setShowRanks] = useState(false)
   const [miss, setMiss] = useState<NearMiss | null>(null)
   const [saved, setSaved] = useState<SavedPlacement[]>([])
   const [placeName, setPlaceName] = useState<string | null>(null)
@@ -154,8 +141,6 @@ export default function PlacePanel({
   const shellLabel = current
     ? `${current.shell_km.toLocaleString('en-US')}–${(current.shell_km + 50).toLocaleString('en-US')} km`
     : null
-  const scoredShell = scoredAltitude == null ? null : Math.floor(scoredAltitude / 50) * 50
-  const scoreForShell = Boolean(placeMeta && shellLabel && current && scoredShell === current.shell_km)
   const rankAltitude = Math.min(2000, Math.max(300, altitude))
   const listedLo = Math.floor(rankAltitude / 50) * 50
 
@@ -169,25 +154,13 @@ export default function PlacePanel({
       void placeAt(altitude, inclination, count, nextDims)
         .then((result) => {
           setPlace(result)
-          setScoredAltitude(altitude)
         })
         .catch(() => {
           setPlace(null)
-          setScoredAltitude(null)
         })
     }, 220)
     return () => window.clearTimeout(timer)
   }, [altitude, inclination, count, size])
-
-  useEffect(() => {
-    const nextDims = dimsFor(size)
-    const timer = window.setTimeout(() => {
-      void rankShells(count, 5, nextDims)
-        .then(setRanks)
-        .catch(() => setRanks([]))
-    }, 220)
-    return () => window.clearTimeout(timer)
-  }, [count, size])
 
   useEffect(() => {
     void closestMiss()
@@ -318,27 +291,6 @@ export default function PlacePanel({
             onChange={(event) => chooseSize(event.target.value)}
           />
         </label>
-        <div className="presets count-presets" role="group" aria-label="Satellite count">
-          {COUNTS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              aria-pressed={count === item.value}
-              onClick={() => {
-                if (item.value !== count) commit()
-                onCount(item.value)
-              }}
-            >
-              <span className="num">{item.label}</span>
-              <span>sats</span>
-            </button>
-          ))}
-        </div>
-        {!COUNTS.some((item) => item.value === count) && (
-          <p className="shell-line">
-            <span className="num">{formatCount(count)}</span> sats
-          </p>
-        )}
       </section>
 
       <section className="step">
@@ -346,44 +298,6 @@ export default function PlacePanel({
           <span className="step-num num">2</span>
           Where
         </h2>
-        <button
-          type="button"
-          className="suggest"
-          aria-expanded={showRanks}
-          onClick={() => setShowRanks((open) => !open)}
-        >
-          Suggest safest shells
-        </button>
-        {showRanks && ranks.length > 0 && (
-          <ol className="rank-list">
-            {ranks.map((row) => {
-              const mid = row.alt_lo + 25
-              const active = altitude >= row.alt_lo && altitude < row.alt_hi
-              return (
-                <li key={row.alt_lo}>
-                  <button
-                    type="button"
-                    className="rank-row"
-                    aria-pressed={active}
-                    onClick={() => {
-                      commit()
-                      onAltitude(mid)
-                    }}
-                  >
-                    <span className="rank-score num">{row.score}</span>
-                    <span>
-                      <strong>
-                        {row.alt_lo}–{row.alt_hi} km
-                      </strong>
-                      <span className="rank-reason">{row.reason}</span>
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ol>
-        )}
-
         <label className="field">
           <span className="field-label">
             <span className="mark">Altitude</span>
@@ -415,8 +329,7 @@ export default function PlacePanel({
                 aria-pressed={placeMeta?.label === name}
                 onClick={() => askPlace(name)}
               >
-                <span>{name}</span>
-                <span>ground track</span>
+                {name}
               </button>
             ))}
           </div>
@@ -500,10 +413,7 @@ export default function PlacePanel({
             <span className="num">{formatBand(Math.abs(pickedLat))}°</span>.
           </p>
         )}
-        <p className="shell-note">
-          Low-orbit satellites can't hover over one place. They pass over it on some orbits. Only geostationary
-          satellites (~36,000 km) stay fixed.
-        </p>
+        <p className="shell-note">A low orbit passes over a place. It does not stay there.</p>
 
         <label className="field">
           <span className="field-label">
@@ -535,20 +445,17 @@ export default function PlacePanel({
           </p>
         )}
 
-        <div className="presets beat-presets">
-          <button type="button" onClick={() => onScene({ altitude: 900, count: 1_000_000, debrisOnly: false })}>
-            <span>1M at 900 km</span>
-            <span>self-crowding</span>
-          </button>
-          <button type="button" onClick={() => onScene({ altitude: 525, debrisOnly: false })}>
-            <span>Safest 500 km</span>
-            <span>clears in years</span>
-          </button>
-          <button type="button" onClick={() => onScene({ altitude: 825, debrisOnly: true })}>
-            <span>Debris 800 km</span>
-            <span>junk stays</span>
-          </button>
-        </div>
+        <details className="fold">
+          <summary>Examples</summary>
+          <div className="presets beat-presets">
+            <button type="button" onClick={() => onScene({ altitude: 525, debrisOnly: false })}>
+              Quiet 500 km
+            </button>
+            <button type="button" onClick={() => onScene({ altitude: 825, debrisOnly: true })}>
+              Debris at 800 km
+            </button>
+          </div>
+        </details>
 
         <button
           className="debris-toggle"
@@ -574,31 +481,49 @@ export default function PlacePanel({
                 data-tone={tone}
                 aria-describedby="impact-tip"
                 aria-label={
-                  scoreForShell
-                    ? `${formatScore(place.score)} out of 100 for the ${shellLabel} shell, every inclination`
+                  place.band_inc_lo != null && place.band_inc_hi != null
+                    ? `${formatScore(place.score)} out of 100 for the ${formatBand(place.band_inc_lo)}–${formatBand(place.band_inc_hi)}° band`
                     : `${formatScore(place.score)} out of 100, ${tone}`
                 }
               >
                 <span className="impact-num num">{formatScore(place.score)}</span>
                 <span className="impact-den">/100</span>
-                <span className="impact-verdict">{scoreForShell ? shellLabel : tone}</span>
+                <span className="impact-verdict">
+                  {place.band_inc_lo != null && place.band_inc_hi != null
+                    ? `${formatBand(place.band_inc_lo)}–${formatBand(place.band_inc_hi)}°`
+                    : tone}
+                </span>
               </button>
-              {scoreForShell && (
+              {place.band_inc_lo != null && (
                 <p className="shell-line">
-                  This score is for the {shellLabel} shell, at every inclination. The list above is which band is
-                  quiet.
+                  This {formatBand(place.band_inc_lo)}–{formatBand(place.band_inc_hi ?? place.band_inc_lo)}° band
+                  {shellLabel ? ` in the ${shellLabel} shell` : ''}. More tracked satellites or debris in the band
+                  lowers the score.
                 </p>
               )}
               <div id="impact-tip" className="impact-tip" role="tooltip">
                 <p>
-                  {scoreForShell
-                    ? `This number ranks the ${shellLabel} shell. It mixes collision harm, how long wreckage stays, and how dense this shell is today. Every inclination in the shell shares it.`
-                    : 'Higher is safer. Score mixes collision harm, how long wreckage stays, and how dense this shell is today.'}
+                  The altitude shell sets how long wreckage stays and how dense the shell is. Tracked objects in this
+                  10° inclination band move the number up or down. A band with nothing tracked is not empty space.
                 </p>
                 <p>
                   Wreckage {yearsLabel(place.dead_sat_lifetime_years)} ·{' '}
                   <span className="num">{formatCollisionCount(place.collisions_per_year)}</span> collisions/yr
-                  (first-order) · {formatCount(Math.round(place.objects_before))} objects already here.
+                  (first-order, whole shell)
+                  {place.band_tracked != null && (
+                    <>
+                      {' '}
+                      · <span className="num">{formatBand(place.band_tracked)}</span> tracked in this band
+                    </>
+                  )}
+                  {place.band_debris != null && (
+                    <>
+                      {' '}
+                      · <span className="num">{formatBand(place.band_debris)}</span> debris
+                    </>
+                  )}
+                  {' '}
+                  · {formatCount(Math.round(place.objects_before))} in the whole shell.
                 </p>
                 <p>Tracked objects only, lower bound.</p>
               </div>
@@ -627,11 +552,8 @@ export default function PlacePanel({
       </section>
 
       {ready && (
-        <section className="step">
-          <h2 className="step-title">
-            <span className="step-num num">4</span>
-            Save & compare
-          </h2>
+        <details className="fold">
+          <summary>Save & compare</summary>
           <input
             type="text"
             className="save-name"
@@ -709,7 +631,7 @@ export default function PlacePanel({
               })}
             </ol>
           )}
-        </section>
+        </details>
       )}
 
       <button type="button" className="quieter" onClick={onVisualizeShell}>
