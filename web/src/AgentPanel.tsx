@@ -3,7 +3,6 @@ import {
   askGrok,
   eventsFromAsk,
   focusWithMission,
-  imagineGrok,
   listenGrok,
   speakGrok,
   type AskContext,
@@ -37,7 +36,6 @@ export default function AgentPanel({ altitude, count, context, onFocus, onUiEven
   const [listening, setListening] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasAudio, setHasAudio] = useState(false)
-  const [image, setImage] = useState<{ src: string; label: string } | null>(null)
   const [focus, setFocus] = useState<FocusOrbit | null>(null)
   const playerRef = useRef<HTMLAudioElement>(null)
   const objectUrl = useRef<string | null>(null)
@@ -51,7 +49,6 @@ export default function AgentPanel({ altitude, count, context, onFocus, onUiEven
     setAnswer('Checking our catalog…')
     setSources([])
     setReasoner('')
-    setImage(null)
     setFocus(null)
     onFocus(null)
     if (objectUrl.current) {
@@ -68,19 +65,6 @@ export default function AgentPanel({ altitude, count, context, onFocus, onUiEven
       if (nextFocus) setFocus(nextFocus)
       for (const event of eventsFromAsk(result)) onUiEvent(event)
 
-      const localOnly = result.reasoner === 'local' || result.reasoner === 'local_fallback'
-      if (!localOnly) {
-        void imagineGrok(
-          result.focus
-            ? `Low Earth orbit shell at ${Math.round(result.focus.altitude_km)} km, inclination ${Math.round(result.focus.inclination_deg)} degrees`
-            : 'Low Earth orbit with satellites and amber debris around Earth',
-        )
-          .then((art) => {
-            const src = art.url ?? (art.b64_json ? `data:image/png;base64,${art.b64_json}` : '')
-            if (src) setImage({ src, label: art.label })
-          })
-          .catch(() => {})
-      }
       if (speak && result.answer) {
         try {
           const blob = await speakGrok(result.answer)
@@ -209,12 +193,6 @@ export default function AgentPanel({ altitude, count, context, onFocus, onUiEven
         <p className="source" title="Tracked objects only, lower bound. CelesTrak SATCAT, GP, SOCRATES.">
           Sources: {sourceLine} · tracked objects only, lower bound
         </p>
-      )}
-      {image && (
-        <figure className="imagine">
-          <img src={image.src} alt={image.label} />
-          <figcaption>{image.label}</figcaption>
-        </figure>
       )}
       <audio ref={playerRef} className={hasAudio ? 'ask-audio' : 'ask-audio is-idle'} controls />
     </aside>

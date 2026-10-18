@@ -31,20 +31,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.legend-block {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 8px 12px;
-  margin-top: 10px;
-}
-
 .clock {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 0;
+  margin: 10px 0 0;
 }
 
 .clock button {
@@ -185,20 +176,35 @@ h1 {
   color: rgba(201, 214, 227, 0.62);
 }
 
+.rail {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 2;
+  width: min(240px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 18px;
+  pointer-events: none;
+  text-align: right;
+}
+
 .legend {
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  max-width: 280px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .legend li {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
+  justify-content: flex-end;
   font-size: 11px;
   letter-spacing: 0.02em;
 }
@@ -206,16 +212,6 @@ h1 {
 .swatch {
   width: 8px;
   height: 8px;
-}
-
-.swatch-constellation {
-  background: #67e8f9;
-  border-radius: 50%;
-}
-
-.legend-count {
-  color: rgba(201, 214, 227, 0.78);
-  font-variant-numeric: tabular-nums;
 }
 
 .source {
@@ -776,11 +772,9 @@ input.place-input {
 }
 
 .inspect {
-  position: fixed;
-  top: 20px;
-  right: 24px;
+  position: relative;
   z-index: 2;
-  width: min(240px, calc(100vw - 48px));
+  width: 100%;
   margin: 0;
   pointer-events: none;
   text-align: right;
@@ -1026,6 +1020,7 @@ input.place-input {
 body.is-sim .hud,
 body.is-sim .hud-agent,
 body.is-sim .hud::before,
+body.is-sim .rail,
 body.is-sim .inspect,
 body.is-sim .inspect::before {
   display: none;

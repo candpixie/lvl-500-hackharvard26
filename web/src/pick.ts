@@ -55,6 +55,8 @@ export function screenNearest(options: {
   altitudeKm: number
   debrisOnly: boolean
   radiusPx: number
+  /** When false, a click can land on a dim dot outside the altitude on the slider. */
+  shellOnly?: boolean
 }): number | null {
   const { positions, camera, width, height, x, y } = options
   const cam = camera.position
@@ -66,7 +68,7 @@ export function screenNearest(options: {
 
   for (let index = 0; index < count; index++) {
     const altitude = options.altitudes[index]
-    if (altitude < bounds.min || altitude > bounds.max) continue
+    if (options.shellOnly !== false && (altitude < bounds.min || altitude > bounds.max)) continue
     if (options.debrisOnly && options.kinds[index] < 0.5) continue
     const px = positions[index * 3]
     const py = positions[index * 3 + 1]
