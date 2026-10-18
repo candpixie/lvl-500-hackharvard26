@@ -10,7 +10,7 @@ import {
   type PlaceResult,
   type RankRow,
 } from './events.ts'
-import { bandNeighbors, planKindChange, type BandGrid, type OrbitState } from './launchKinds.ts'
+import { bandNeighbors, sceneForKind, type BandGrid } from './launchKinds.ts'
 import { majorityLabel, shellForAltitude, shellRange, shellTotal, type ShellRow } from './shells.ts'
 
 const PLACE_CHIPS = ['Africa', 'China', 'Europe']
@@ -163,7 +163,6 @@ export default function PlacePanel({
   const [touched, setTouched] = useState(false)
   const [kinds, setKinds] = useState<LaunchKind[]>([])
   const [grid, setGrid] = useState<BandGrid | null>(null)
-  const beforeKind = useRef<OrbitState | null>(null)
   const [kindKey, setKindKey] = useState('')
   const kind = kinds.find((row) => row.kind === kindKey) ?? null
   const neighbors = kind && grid ? bandNeighbors(grid, altitude, inclination) : null
@@ -229,10 +228,8 @@ export default function PlacePanel({
 
   function chooseKind(key: string) {
     setKindKey(key)
-    const row = kinds.find((item) => item.kind === key) ?? null
-    const plan = planKindChange(beforeKind.current, { altitude, inclination, chosen: altitudeChosen }, row)
-    beforeKind.current = plan.saved
-    if (plan.scene) onScene({ ...plan.scene })
+    // a kind moves the sliders to its typical orbit; "Custom" puts the page back to its original default
+    onScene({ ...sceneForKind(kinds.find((item) => item.kind === key) ?? null) })
   }
 
   useEffect(() => {

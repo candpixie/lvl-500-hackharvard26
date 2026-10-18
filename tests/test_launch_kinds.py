@@ -53,3 +53,16 @@ def test_the_example_the_pr_quotes_is_true():
     """Weather satellites' neighbors: about 2,070 of the 10,374 tracked objects in 450 to 500 km are in the 90 to 100 degree band."""
     a, b = BAND["alt_lo"].index(450), BAND["inc_lo"].index(90)
     assert (BAND["total"][a][b], BAND["shell_total"][a], BAND["debris"][a][b]) == (2070, 10374, 37)
+
+
+def test_custom_default_matches_the_apps_own_defaults():
+    """Picking "Custom" resets to DEFAULT_ORBIT in launchKinds.ts. It must equal what the page loads with."""
+    import re
+    app = (ROOT / "web/src/App.tsx").read_text()
+    kinds_ts = (ROOT / "web/src/launchKinds.ts").read_text()
+    start = int(re.search(r"const START_ALTITUDE = (\d+)", app).group(1))
+    inc = int(re.search(r"const DEFAULT_INCLINATION = (\d+)", app).group(1))
+    default = re.search(r"DEFAULT_ORBIT: OrbitState = \{ altitude: (\d+), inclination: (\d+), chosen: false \}", kinds_ts)
+    assert default, "DEFAULT_ORBIT line not found in launchKinds.ts"
+    assert (int(default.group(1)), int(default.group(2))) == (start, inc)
+    assert "useState(false)" in re.search(r"const \[altitudeChosen, setAltitudeChosen\] = [^\n]+", app).group(0)  # chosen: false is the start

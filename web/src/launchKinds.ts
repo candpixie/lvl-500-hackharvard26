@@ -55,22 +55,22 @@ export function bandNeighbors(grid: BandGrid, altitudeKm: number, inclinationDeg
   }
 }
 
-/** What the panel needs to put back when the user returns to "Custom". */
+/** The orbit the panel puts on screen. `chosen` is whether the app should treat an orbit as picked yet. */
 export interface OrbitState {
   altitude: number
   inclination: number
   chosen: boolean
 }
 
-/** Decide what to do when the picker changes. Picking a kind remembers the orbit the user had before the FIRST
- *  kind they picked (switching between kinds keeps that original), and moves to the kind's typical orbit.
- *  Picking "Custom" (kind = null) puts back the remembered orbit, including "no orbit chosen yet", and forgets it. */
-export function planKindChange(
-  saved: OrbitState | null,
-  current: OrbitState,
+/** What the page shows when it first loads. Keep in step with START_ALTITUDE and DEFAULT_INCLINATION in App.tsx
+ *  (tests/test_launch_kinds.py checks that they match). */
+export const DEFAULT_ORBIT: OrbitState = { altitude: 480, inclination: 53, chosen: false }
+
+/** The orbit to show for the picker's choice: the kind's typical orbit, or, for "Custom" (kind = null), the
+ *  page's original default, whatever was on screen before. */
+export function sceneForKind(
   kind: { altitude_km: { median: number }; inclination_deg_median: number } | null,
-): { saved: OrbitState | null; scene: OrbitState | null } {
-  if (!kind) return { saved: null, scene: saved }
-  const next = presetOrbit(kind.altitude_km.median, kind.inclination_deg_median)
-  return { saved: saved ?? current, scene: { ...next, chosen: true } }
+): OrbitState {
+  if (!kind) return { ...DEFAULT_ORBIT }
+  return { ...presetOrbit(kind.altitude_km.median, kind.inclination_deg_median), chosen: true }
 }
